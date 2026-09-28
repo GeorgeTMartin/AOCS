@@ -1,11 +1,11 @@
-cmake_minimum_version_required(4.0)
-
-project(AOCS VERSION 0.1)
+cmake_minimum_required(VERSION 3.20)
+project(AOCS VERSION 0.1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED True)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
-target_include_directories(AOCS PRIVATE ${CMAKE_SOURCE_DIR}/include)
+include(CTest)
 
-add_subdirectory(src)
-add_subdirectory(test)
+add_subdirectory(gnc_lib)
+add_subdirectory(sim)

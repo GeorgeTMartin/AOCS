@@ -1,0 +1,13 @@
+{
+    "simulation": {
+        "initial_conditions": {
+            "r0_sc_eci_m": [6.878e6, 0, 0],
+            "v0_sc_eci_m": [0, 7.66e3, 0]
+        },
+        "sim_length_sec": 3600000.0,
+        "dt_sec": 0.1
+    },
+    "spacecraft": {
+        "mass_kg": 100
+    }
+}
