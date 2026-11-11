@@ -1,9 +1,0 @@
-{
-	"InstallScripts" : 
-	[
-		"/home/george/AOCS/build/cmake_install.cmake",
-		"/home/george/AOCS/build/gnc_lib/cmake_install.cmake",
-		"/home/george/AOCS/build/sim/cmake_install.cmake"
-	],
-	"Parallel" : false
-}
