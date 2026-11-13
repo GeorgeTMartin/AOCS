@@ -3,8 +3,10 @@
 #include <Eigen/Dense>
 #include <json/value.h>
 #include <json/reader.h>
+#include <exception>
 #include <fstream>
 #include <iostream>
+#include <memory>
 
 bool B_simulationRunning = true;
 
@@ -40,7 +42,45 @@ int main() {
         initialConditions["v0_sc_eci_m"][2].asDouble()
     );
     double mass_kg = config["spacecraft"]["mass_kg"].asDouble();
-    Gravity gravity;
+
+
+    const Json::Value& gravityConfig = config["environment"]["gravity"];
+    if (!gravityConfig.isObject() || !gravityConfig["model"].isString()) {
+        std::cerr << "environment.gravity.model must be 'point_mass' or 'egm2008'\n";
+        return 1;
+    }
+
+    const std::string gravityModelName = gravityConfig["model"].asString();
+    GravityModel gravityModel;
+    std::uint32_t gravityDegree = 0;
+    std::uint32_t gravityOrder = 0;
+    std::unique_ptr<EGM2008Coefficients> egm2008;
+    if (gravityModelName == "point_mass") {
+        gravityModel = GravityModel::E_PointMass;
+    } else if (gravityModelName == "egm2008") {
+        gravityModel = GravityModel::E_EGM2008;
+        if (!gravityConfig["degree"].isUInt() || !gravityConfig["order"].isUInt()) {
+            std::cerr << "environment.gravity.degree and order must be non-negative integers\n";
+            return 1;
+        }
+        gravityDegree = gravityConfig["degree"].asUInt();
+        gravityOrder = gravityConfig["order"].asUInt();
+        try {
+            egm2008 = std::make_unique<EGM2008Coefficients>("data/earth_gravity/emg2008_coefficients.bin");
+        } catch (const std::exception& error) {
+            std::cerr << "Unable to load EGM2008 coefficients: " << error.what() << '\n';
+            return 1;
+        }
+        if (gravityDegree > egm2008->maxDegree || gravityOrder > gravityDegree) {
+            std::cerr << "EGM2008 degree must not exceed " << egm2008->maxDegree
+                      << " and order must not exceed degree\n";
+            return 1;
+        }
+    } else {
+        std::cerr << "Unsupported environment.gravity.model: " << gravityModelName << '\n';
+        return 1;
+    }
+    Gravity gravity(egm2008.get());
 
     std::ofstream outputFile("output.csv");
     if (!outputFile) {
@@ -60,7 +100,9 @@ int main() {
 
     while (B_simulationRunning) {
         // update simulation state
-        Eigen::Matrix<double, 3, 1> gravityForce = gravity.computeGravity(position, mass_kg);
+        Eigen::Matrix<double, 3, 1> gravityForce =
+            gravity.computeGravity(
+                position, mass_kg, gravityModel, gravityDegree, gravityOrder);
 
         // update position and velocity
         velocity += gravityForce / mass_kg * dt_sec;

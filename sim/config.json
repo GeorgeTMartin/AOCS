@@ -4,10 +4,17 @@
             "r0_sc_eci_m": [6.878e6, 0, 0],
             "v0_sc_eci_m": [0, 7.66e3, 520]
         },
-        "sim_length_sec": 10800.0,
+        "sim_length_sec": 30.0,
         "dt_sec": 0.1
     },
     "spacecraft": {
         "mass_kg": 100.0
+    },
+    "environment": {
+        "gravity": {
+            "model": "point_mass",
+            "degree": 16,
+            "order": 16
+        }
     }
 }
