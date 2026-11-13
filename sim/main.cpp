@@ -10,11 +10,15 @@ bool B_simulationRunning = true;
 
 int main() {
     // initialize simulation
-    // load initial conditions from config.json
+    // Load config.json from the current directory, or from sim/ when run from the repository root.
     std::ifstream configFile("config.json");
     if (!configFile) {
-        std::cerr << "Unable to open config.json\n";
-        return 1;
+        configFile.clear();
+        configFile.open("sim/config.json");
+        if (!configFile) {
+            std::cerr << "Unable to open config.json or sim/config.json\n";
+            return 1;
+        }
     }
 
     Json::Value config;
@@ -37,6 +41,14 @@ int main() {
     );
     double mass_kg = config["spacecraft"]["mass_kg"].asDouble();
     Gravity gravity;
+
+    std::ofstream outputFile("output.csv");
+    if (!outputFile) {
+        std::cerr << "Unable to open output.csv for writing\n";
+        return 1;
+    }
+    outputFile << "t_sec,r_x_m,r_y_m,r_z_m,v_x_m_s,v_y_m_s,v_z_m_s\n";
+    
     // while loop for simulation
     double t_simulation {0.0};
     double sim_length_sec = config["simulation"]["sim_length_sec"].asDouble();
@@ -56,6 +68,10 @@ int main() {
 
         // update simulation time
         t_simulation += dt_sec;
+        outputFile << t_simulation << ',' << position.x() << ',' << position.y() << ',' << position.z()
+                   << ',' << velocity.x() << ',' << velocity.y() << ',' << velocity.z() << '\n';
+
+
 
         // check if simulation has reached the end time
         if (t_simulation >= sim_length_sec) {
@@ -68,6 +84,7 @@ int main() {
     }
 
     // clean up simulation resources
+    outputFile.close();
 
     return 0;
 }
