@@ -21,7 +21,7 @@ struct JulianDate {
     double part2;
 
     static JulianDate fromJ2000Seconds(double secondsSinceJ2000) {
-        return {2451545.0, secondsSinceJ2000 / 86400.0};
+        return {SimConstants::kJulianDateJ2000toJulianDate, secondsSinceJ2000 / SimConstants::kSecondsPerDay};
     }
 };
 
@@ -43,9 +43,8 @@ struct EarthRotationReduction {
 namespace detail {
 
 constexpr double kTwoPi = 2.0 * SimConstants::kPi;
-constexpr double kArcsecondsToRadians = SimConstants::kPi / (180.0 * 3600.0);
+constexpr double kArcsecondsToRadians = SimConstants::kDegtoRad / 3600.0;
 constexpr double kDaysPerCentury = 36525.0;
-constexpr double kJ2000 = 2451545.0;
 
 struct NutationTerm {
     int l;
@@ -195,7 +194,7 @@ double normalizeAngle(double angle) {
 }
 
 double centuriesSinceJ2000(const JulianDate& date) {
-    return ((date.part1 - kJ2000) + date.part2) / kDaysPerCentury;
+    return ((date.part1 - SimConstants::kJulianDateJ2000toJulianDate) + date.part2) / kDaysPerCentury;
 }
 
 Eigen::Matrix3d rotationX(double angle) {
@@ -287,7 +286,7 @@ double earthRotationAngle(const JulianDate& ut1) {
     if (first > second) {
         std::swap(first, second);
     }
-    const double daysSinceJ2000 = first + (second - kJ2000);
+    const double daysSinceJ2000 = first + (second - SimConstants::kJulianDateJ2000toJulianDate);
     const double fractionalDay = std::fmod(first, 1.0) + std::fmod(second, 1.0);
     return normalizeAngle(kTwoPi *
         (fractionalDay + 0.7790572732640 + 0.00273781191135448 * daysSinceJ2000));
