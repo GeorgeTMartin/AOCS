@@ -19,6 +19,21 @@ target_include_directories(sim PRIVATE
     ${EIGEN_INCLUDE_DIR}
 )
 
+find_package(Python3 COMPONENTS Interpreter Development.Module REQUIRED)
+find_package(pybind11 CONFIG REQUIRED)
+
+pybind11_add_module(aocs_orbit MODULE
+    bindings/astro_bindings.cpp
+)
+target_include_directories(aocs_orbit PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${PROJECT_SOURCE_DIR}/shared
+    ${EIGEN_INCLUDE_DIR}
+)
+set_target_properties(aocs_orbit PROPERTIES
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/python"
+)
+
 if(BUILD_TESTING)
     add_executable(sim_math_tests
         tests/math_tests.cpp

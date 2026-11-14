@@ -5,8 +5,8 @@
             "v0_sc_eci_m": [0, 7.66e3, 520],
             "t_J2000_s": 746337600.0
         },
-        "sim_length_sec": 1800.0,
-        "dt_sec": 0.1
+        "sim_length_sec": 54000.0,
+        "dt_sec": 10
     },
     "spacecraft": {
         "mass_kg": 100.0

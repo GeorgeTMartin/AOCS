@@ -4,11 +4,11 @@ This repository is intended to provide the basis of development for primitive AO
 
 ## Build
 
-Requirements: CMake 3.20 or newer, a C++17 compiler, and the JsonCpp development package. Eigen is included in the repository.
+Requirements: CMake 3.20 or newer, a C++17 compiler, the JsonCpp and pybind11 development packages, and Python development headers. Eigen is included in the repository.
 
 ```sh
 sudo apt-get update
-sudo apt-get install cmake g++ libjsoncpp-dev
+sudo apt-get install cmake g++ libjsoncpp-dev pybind11-dev python3-dev
 ```
 
 From a fresh clone, configure and build with:
@@ -23,46 +23,6 @@ Run the simulation from the repository root:
 ```sh
 ./build/sim/sim
 ```
-
-## Earth rotation and quaternions
-
-`sim/include/environment/earth_rotation/iau2000b.hpp` reduces GCRS (ECI)
-coordinates to ITRS (ECEF) using IAU 2000B nutation, IAU 2000 precession
-and frame bias, Greenwich apparent sidereal time, and polar motion. The
-returned matrix and quaternion are passive coordinate transforms; applying
-either maps a GCRS vector into ITRS. The quaternion is scalar-first and uses
-the Hamilton product convention.
-
-Supply TT and UT1 as two-part Julian dates. TT drives precession and
-nutation; UT1 drives Earth rotation. Polar motion `xp` and `yp` are in
-radians and default to zero. The library does not convert UTC to TT/UT1:
-callers must provide the appropriate time scales and Earth orientation
-parameters. For elapsed seconds from J2000.0, use
-`JulianDate::fromJ2000Seconds` for each time scale.
-
-The simulation reads `simulation.initial_conditions.t_J2000_s` from
-`sim/config.json` as its initial epoch and adds the elapsed simulation time
-before each gravity evaluation. Since the sample configuration provides one
-epoch only, it uses that epoch for both TT and UT1 and assumes zero polar
-motion.
-
-```cpp
-using aocs::environment::EarthRotation;
-using aocs::environment::JulianDate;
-
-const auto reduction =
-    EarthRotation(tt, ut1, xpRadians, ypRadians).reduce();
-const Eigen::Vector3d rItrs = reduction.gcrsToItrs * rGcrs;
-const Eigen::Vector3d rItrsFromQuaternion =
-    reduction.gcrsToItrsQuaternion.rotatePassive(rGcrs);
-```
-
-The IAU 2000B model is approximately 1 milliarcsecond, and this reduction
-does not include observed celestial-pole offsets (`dX`, `dY`) or sub-daily
-Earth-orientation corrections. The equation of the equinoxes includes its
-IAU 2000 complementary terms. The reusable quaternion type is in
-`shared/math/quaternion.hpp`.
-
 
 ## Analysis
 
@@ -79,3 +39,19 @@ Install requirements
 ```sh
 pip install -r requirements.txt
 ```
+
+After running the simulation, generate the orbital-element time-series plot
+from the repository root:
+
+```sh
+python plotting/plot_results.py
+```
+
+The simulation CSV stores only time, position, and velocity. The plotter calls
+the `aocs_orbit` pybind11 module, which invokes the C++
+`IJKKeplerian::convert_ijk_to_keplerian` function for each state vector. It
+plots the osculating semi-major axis, eccentricity, inclination, RAAN,
+argument of periapsis, and true anomaly in six panels in `output.html`.
+Angular values are converted from radians to degrees for plotting. The report
+also includes a dark, retro-styled 3D ECI orbit view with an Earth sphere at
+the origin.
