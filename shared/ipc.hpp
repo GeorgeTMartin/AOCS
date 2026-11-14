@@ -16,8 +16,8 @@
 #define SEM_FSW_TO_SIM "/sem_fsw2sim_w0"     // semaphore for flight software to simulation communication
 
 struct sensorMessage {
-    Eigen::Matrix<double, 3, 1> GPS_position_ECI;   // TODO: replace with ECEF
-    Eigen::Matrix<double, 3, 1> GPS_velocity_ECI;   // TODO: replace with ECEF
+    Eigen::Matrix<double, 3, 1> GPS_position_ECEF;   // TODO: replace with ECEF
+    Eigen::Matrix<double, 3, 1> GPS_velocity_ECEF;   // TODO: replace with ECEF
     Eigen::Matrix<double, 3, 1> GPS_time;           // seconds elapsed since the GPS epoch
 };
 

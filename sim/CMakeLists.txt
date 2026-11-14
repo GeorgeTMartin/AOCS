@@ -1,5 +1,6 @@
 add_executable(sim
     main.cpp
+    initialization.cpp
 )
 
 configure_file(config.json config.json COPYONLY)
