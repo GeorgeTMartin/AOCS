@@ -2,9 +2,10 @@
     "simulation": {
         "initial_conditions": {
             "r0_sc_eci_m": [6.878e6, 0, 0],
-            "v0_sc_eci_m": [0, 7.66e3, 520]
+            "v0_sc_eci_m": [0, 7.66e3, 520],
+            "t_J2000_s": 746337600.0
         },
-        "sim_length_sec": 30.0,
+        "sim_length_sec": 1800.0,
         "dt_sec": 0.1
     },
     "spacecraft": {
@@ -12,9 +13,9 @@
     },
     "environment": {
         "gravity": {
-            "model": "point_mass",
-            "degree": 16,
-            "order": 16
+            "model": "egm2008",
+            "degree": 32,
+            "order": 32
         }
     }
 }

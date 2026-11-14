@@ -1,6 +1,6 @@
 #pragma once
 
-#include "environment/earthGravity/egm2008_coefficients.hpp"
+#include "environment/earth_gravity/egm2008_coefficients.hpp"
 #include <Eigen/Dense>
 #include <algorithm>
 #include <cmath>

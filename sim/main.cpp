@@ -1,8 +1,10 @@
 #include "ipc.hpp"
-#include "environment/earthGravity/gravity.hpp"
+#include "environment/earth_gravity/gravity.hpp"
+#include "environment/earth_rotation/iau2000b.hpp"
 #include <Eigen/Dense>
 #include <json/value.h>
 #include <json/reader.h>
+#include <cmath>
 #include <exception>
 #include <fstream>
 #include <iostream>
@@ -41,6 +43,15 @@ int main() {
         initialConditions["v0_sc_eci_m"][1].asDouble(),
         initialConditions["v0_sc_eci_m"][2].asDouble()
     );
+    if (!initialConditions["t_J2000_s"].isNumeric()) {
+        std::cerr << "simulation.initial_conditions.t_J2000_s must be seconds since J2000\n";
+        return 1;
+    }
+    const double epoch_J2000_s = initialConditions["t_J2000_s"].asDouble();
+    if (!std::isfinite(epoch_J2000_s)) {
+        std::cerr << "simulation.initial_conditions.t_J2000_s must be finite\n";
+        return 1;
+    }
     double mass_kg = config["spacecraft"]["mass_kg"].asDouble();
 
 
@@ -99,13 +110,20 @@ int main() {
     }
 
     while (B_simulationRunning) {
-        // update simulation state
-        Eigen::Matrix<double, 3, 1> gravityForce =
+        const double t_J2000_s = epoch_J2000_s + t_simulation;
+        const aocs::environment::JulianDate date =
+            aocs::environment::JulianDate::fromJ2000Seconds(t_J2000_s);
+        const auto earthRotation =
+            aocs::environment::EarthRotation(date, date).reduce();
+        const Eigen::Vector3d position_ecef = earthRotation.gcrsToItrs * position;
+        const Eigen::Vector3d gravityForce_ecef =
             gravity.computeGravity(
-                position, mass_kg, gravityModel, gravityDegree, gravityOrder);
+                position_ecef, mass_kg, gravityModel, gravityDegree, gravityOrder);
+        const Eigen::Vector3d gravityForce_eci =
+            earthRotation.gcrsToItrs.transpose() * gravityForce_ecef;
 
         // update position and velocity
-        velocity += gravityForce / mass_kg * dt_sec;
+        velocity += gravityForce_eci / mass_kg * dt_sec;
         position += velocity * dt_sec;
 
         // update simulation time

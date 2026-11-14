@@ -18,6 +18,18 @@ target_include_directories(sim PRIVATE
     ${EIGEN_INCLUDE_DIR}
 )
 
+if(BUILD_TESTING)
+    add_executable(sim_math_tests
+        tests/math_tests.cpp
+    )
+    target_include_directories(sim_math_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${PROJECT_SOURCE_DIR}/shared
+        ${EIGEN_INCLUDE_DIR}
+    )
+    add_test(NAME sim_math_tests COMMAND sim_math_tests)
+endif()
+
 find_package(jsoncpp CONFIG QUIET)
 
 if(TARGET JsonCpp::JsonCpp)
