@@ -5,8 +5,9 @@
             "v0_sc_eci_m": [0, 5.5e3, 5.5e3],
             "t_J2000_s": 746337600.0
         },
-        "sim_length_sec": 54000.0,
-        "dt_sec": 10
+        "orbit_count": 2,
+        "aocs_rate_hz": 10,
+        "gps_rate_hz": 1
     },
     "spacecraft": {
         "mass_kg": 100.0

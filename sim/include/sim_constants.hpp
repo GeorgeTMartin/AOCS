@@ -25,4 +25,7 @@ public:
     static constexpr double kEarthMass = 5.972e24; // kilograms
     static constexpr double kGravitationalConstant = 6.67430e-11; // m^3 kg^-1 s^-2
     static constexpr double kEarthMu = kGravitationalConstant * kEarthMass; // m^3 s^-2
+
+    
+    static constexpr double kGpsSecondsAtJ2000 = 630763200.0;
 };

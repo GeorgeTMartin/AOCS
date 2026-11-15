@@ -2,16 +2,16 @@
 
 #include "ipc.hpp"
 #include "navigation/orbit_determination.hpp"
-
+#include "gnc_config.hpp"
 
 namespace aocs {
 
-int main(sharedMemoryMap& sharedMemory);
-
-class Navigation {
-public:
-    Navigation() = default;
-    ~Navigation() = default;
-
+struct GncState {
+    OrbitDetermination orbitDetermination{GncConfig::orbitDeterminationMethod};
+    bool hasInitialEstimate = false;
 };
+
+GncState initializeGnc();
+int runGncStep(GncState& state, sharedMemoryMap& sharedMemory);
+
 } // namespace aocs

@@ -4,7 +4,9 @@ add_library(gnc_lib STATIC
 )
 
 target_include_directories(gnc_lib PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${PROJECT_SOURCE_DIR}/shared
+    ${PROJECT_SOURCE_DIR}/sim/include
     ${PROJECT_SOURCE_DIR}/shared/external/eigen-5.0.0/eigen-5.0.0
 )

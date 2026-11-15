@@ -1,4 +1,5 @@
 #include "environment/earth_rotation/iau2000b.hpp"
+#include "gnc_lib.hpp"
 #include "ipc.hpp"
 #include <math/quaternion.hpp>
 #include "simulation/simulation.hpp"
@@ -169,19 +170,99 @@ void testSharedMemoryGncTransport() {
     SharedMemoryGncTransport transport(region.data(), &captureSensorMessage);
 
     sensorMessage input;
-    input.GPS_position_ECEF = Eigen::Vector3d(1.0, 2.0, 3.0);
-    input.GPS_velocity_ECEF = Eigen::Vector3d(4.0, 5.0, 6.0);
+    input.GPS_position_ECEF_m = {1.0, 2.0, 3.0};
+    input.GPS_velocity_ECEF_m_s = {4.0, 5.0, 6.0};
     input.GPS_time_s = 7.0;
+    input.aocs_time_J2000_s = 6.0;
+    input.has_new_GPS_measurement = 1;
+    input.GPS_covariance_row_major[0] = 9.0;
     require(transport.exchange(input) == 0,
             "Shared-memory GNC transport must return the GNC status");
-    require((receivedSensorMessage.GPS_position_ECEF -
-             input.GPS_position_ECEF).norm() == 0.0,
+    require(receivedSensorMessage.GPS_position_ECEF_m ==
+                input.GPS_position_ECEF_m,
             "GNC entry point must receive the published GPS position");
-    require((receivedSensorMessage.GPS_velocity_ECEF -
-             input.GPS_velocity_ECEF).norm() == 0.0,
+    require(receivedSensorMessage.GPS_velocity_ECEF_m_s ==
+                input.GPS_velocity_ECEF_m_s,
             "GNC entry point must receive the published GPS velocity");
     requireNear(receivedSensorMessage.GPS_time_s, input.GPS_time_s, 0.0,
                 "GNC entry point must receive the published GPS time");
+    requireNear(
+        receivedSensorMessage.GPS_covariance_row_major[0],
+        input.GPS_covariance_row_major[0],
+        0.0,
+        "GNC entry point must receive the GPS covariance");
+}
+
+void testGncStateEstimatePublication() {
+    aocs::GncState state = aocs::initializeGnc();
+    sharedMemoryMap memory{};
+    sensorMessage& input = memory.sensorData;
+    const double t_J2000_s = 100.0;
+    input.GPS_time_s = t_J2000_s + aocs::ipc::kGpsSecondsAtJ2000;
+    input.aocs_time_J2000_s = t_J2000_s;
+    input.has_new_GPS_measurement = 1;
+    input.GPS_position_ECEF_m = {7000000.0, 1000.0, -2000.0};
+    input.GPS_velocity_ECEF_m_s = {1.0, 7500.0, -2.0};
+    for (std::size_t axis = 0; axis < aocs::ipc::kStateDimension; ++axis) {
+        input.GPS_covariance_row_major[
+            axis * aocs::ipc::kStateDimension + axis] = 1.0;
+    }
+    input.GPS_covariance_row_major[1] = 0.25;
+
+    require(aocs::runGncStep(state, memory) == 0,
+            "GNC step must publish its initial GPS-based estimate");
+    require(memory.navigationEstimate.valid == 1,
+            "GNC must mark its published estimate valid");
+    requireNear(memory.navigationEstimate.time_J2000_s, t_J2000_s, 1e-12,
+        "Published estimate must use seconds since J2000");
+
+    const aocs::environment::JulianDate date =
+        aocs::environment::JulianDate::fromJ2000Seconds(t_J2000_s);
+    const Eigen::Matrix3d ecefToEci =
+        aocs::environment::EarthRotation(date, date)
+            .reduce()
+            .gcrsToItrs.transpose();
+    const Eigen::Vector3d position_ecef(
+        input.GPS_position_ECEF_m[0],
+        input.GPS_position_ECEF_m[1],
+        input.GPS_position_ECEF_m[2]);
+    const Eigen::Vector3d velocity_ecef(
+        input.GPS_velocity_ECEF_m_s[0],
+        input.GPS_velocity_ECEF_m_s[1],
+        input.GPS_velocity_ECEF_m_s[2]);
+    const Eigen::Vector3d omega_ecef(0.0, 0.0, 7.2921150e-5);
+    const Eigen::Vector3d expectedPosition = ecefToEci * position_ecef;
+    const Eigen::Vector3d expectedVelocity =
+        ecefToEci * (velocity_ecef + omega_ecef.cross(position_ecef));
+
+    for (std::size_t axis = 0; axis < 3; ++axis) {
+        requireNear(
+            memory.navigationEstimate.position_ECI_m[axis],
+            expectedPosition(static_cast<Eigen::Index>(axis)),
+            1e-9,
+            "Published position must be converted from ECEF to ECI");
+        requireNear(
+            memory.navigationEstimate.velocity_ECI_m_s[axis],
+            expectedVelocity(static_cast<Eigen::Index>(axis)),
+            1e-12,
+            "Published velocity must include Earth-rotation conversion");
+    }
+    requireNear(memory.navigationEstimate.covariance_row_major[1], 0.25, 0.0,
+        "Published covariance must preserve row-major measurement data");
+
+    input.has_new_GPS_measurement = 0;
+    input.aocs_time_J2000_s = t_J2000_s + 0.1;
+    require(aocs::runGncStep(state, memory) == 0,
+            "GNC must propagate between GPS measurements");
+    requireNear(memory.navigationEstimate.time_J2000_s, t_J2000_s + 0.1,
+        1e-12,
+        "GNC must propagate its estimate at the AOCS timestep");
+    const Eigen::Vector3d propagatedPosition(
+        memory.navigationEstimate.position_ECI_m[0],
+        memory.navigationEstimate.position_ECI_m[1],
+        memory.navigationEstimate.position_ECI_m[2]);
+    require((propagatedPosition - expectedPosition).norm() > 1.0,
+            "GNC must propagate position between GPS updates");
 }
 
 }  // namespace
@@ -192,6 +273,7 @@ int main() {
         testIau2000B();
         testRK4Propagation();
         testSharedMemoryGncTransport();
+        testGncStateEstimatePublication();
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';
         return 1;

@@ -11,3 +11,4 @@
 *output.csv
 *output.html
 .vscode/
+*__pycache__/

@@ -44,6 +44,7 @@ if(BUILD_TESTING)
         ${PROJECT_SOURCE_DIR}/shared
         ${EIGEN_INCLUDE_DIR}
     )
+    target_link_libraries(sim_math_tests PRIVATE gnc_lib)
     add_test(NAME sim_math_tests COMMAND sim_math_tests)
 endif()
 

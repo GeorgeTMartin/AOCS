@@ -7,6 +7,8 @@
 
 namespace {
 
+constexpr double kPlaceholderGpsMeasurementVariance = 1.0;
+
 struct EnvironmentalParameters {
     Eigen::Vector3d gravityForce_eci_N;
 };
@@ -53,12 +55,21 @@ sensorMessage updateSensorModels(
         0.0, 0.0, 7.2921150e-5);
 
     sensorMessage sensors;
-    sensors.GPS_position_ECEF = position_ecef_m;
-    sensors.GPS_velocity_ECEF =
+    sensors.GPS_position_ECEF_m = {
+        position_ecef_m.x(), position_ecef_m.y(), position_ecef_m.z()};
+    const Eigen::Vector3d velocity_ecef_m_s =
         earthRotation.gcrsToItrs * simulation.state.velocity_eci_m_s -
         earthAngularVelocity_ecef_rad_s.cross(position_ecef_m);
-    constexpr double kGpsSecondsAtJ2000 = 630763200.0;
-    sensors.GPS_time_s = t_J2000_s + kGpsSecondsAtJ2000;
+    sensors.GPS_velocity_ECEF_m_s = {
+        velocity_ecef_m_s.x(), velocity_ecef_m_s.y(), velocity_ecef_m_s.z()};
+    sensors.GPS_time_s = t_J2000_s + aocs::ipc::kGpsSecondsAtJ2000;
+    sensors.aocs_time_J2000_s = t_J2000_s;
+    sensors.has_new_GPS_measurement = 1;
+    for (std::size_t axis = 0; axis < aocs::ipc::kStateDimension; ++axis) {
+        sensors.GPS_covariance_row_major[
+            axis * aocs::ipc::kStateDimension + axis] =
+            kPlaceholderGpsMeasurementVariance;
+    }
     return sensors;
 }
 
@@ -66,13 +77,31 @@ int runAOCSLoop(GncTransport& transport, const sensorMessage& sensors) {
     return transport.exchange(sensors);
 }
 
-void writeState(aocs::simulation::Simulation& simulation) {
+void writeState(
+    aocs::simulation::Simulation& simulation,
+    const sensorMessage& sensors,
+    const navigationEstimateMessage& estimate) {
     const Eigen::Vector3d& position = simulation.state.position_eci_m;
     const Eigen::Vector3d& velocity = simulation.state.velocity_eci_m_s;
     simulation.outputFile << simulation.elapsedTime_s << ','
                           << position.x() << ',' << position.y() << ',' << position.z()
-                          << ',' << velocity.x() << ',' << velocity.y() << ',' << velocity.z()
-                          << '\n';
+                          << ',' << velocity.x() << ',' << velocity.y() << ','
+                          << velocity.z() << ','
+                          << sensors.GPS_time_s - aocs::ipc::kGpsSecondsAtJ2000 -
+                                 simulation.epoch_J2000_s
+                          << ',' << sensors.has_new_GPS_measurement
+                          << ',' << estimate.time_J2000_s -
+                                 simulation.epoch_J2000_s;
+    for (double value : estimate.position_ECI_m) {
+        simulation.outputFile << ',' << value;
+    }
+    for (double value : estimate.velocity_ECI_m_s) {
+        simulation.outputFile << ',' << value;
+    }
+    for (double value : estimate.covariance_row_major) {
+        simulation.outputFile << ',' << value;
+    }
+    simulation.outputFile << '\n';
 }
 
 } // namespace
@@ -86,9 +115,15 @@ int main() {
 
     try {
         SharedMemoryRegion sharedMemory;
+        aocs::GncState gncState = aocs::initializeGnc();
         SharedMemoryGncTransport transport(
-            sharedMemory.data(), &aocs::main);
+            sharedMemory.data(),
+            [&gncState](sharedMemoryMap& memory) {
+                return aocs::runGncStep(gncState, memory);
+            });
 
+        sensorMessage latestGpsMeasurement;
+        std::uint64_t aocsStep = 0;
         while (simulation->running) {
             const ActuatorState actuators = updateActuatorDynamics(*simulation);
             simulation->propagation.propagate(
@@ -103,13 +138,25 @@ int main() {
                         (environment.gravityForce_eci_N + actuators.force_eci_N) /
                         simulation->mass_kg);
                 });
-            const sensorMessage sensors = updateSensorModels(*simulation);
-            if (runAOCSLoop(transport, sensors) != 0) {
+            if (aocsStep % simulation->gpsSampleIntervalSteps == 0) {
+                latestGpsMeasurement = updateSensorModels(*simulation);
+            } else {
+                latestGpsMeasurement.has_new_GPS_measurement = 0;
+                latestGpsMeasurement.aocs_time_J2000_s =
+                    simulation->epoch_J2000_s + simulation->elapsedTime_s;
+            }
+            if (runAOCSLoop(transport, latestGpsMeasurement) != 0) {
                 std::cerr << "GNC loop reported a failure\n";
                 return 1;
             }
+            const navigationEstimateMessage& navigationEstimate =
+                sharedMemory.data().navigationEstimate;
+            if (navigationEstimate.valid == 0) {
+                std::cerr << "GNC did not publish a valid navigation estimate\n";
+                return 1;
+            }
 
-            writeState(*simulation);
+            writeState(*simulation, latestGpsMeasurement, navigationEstimate);
 
             if (simulation->elapsedTime_s >= simulation->simulationLength_s) {
                 std::cout << "Simulation ended at time: "
@@ -120,6 +167,7 @@ int main() {
                           << simulation->state.velocity_eci_m_s.transpose() << "\n";
                 simulation->running = false;
             }
+            ++aocsStep;
         }
     } catch (const std::exception& error) {
         std::cerr << "Simulation/GNC shared-memory failure: "

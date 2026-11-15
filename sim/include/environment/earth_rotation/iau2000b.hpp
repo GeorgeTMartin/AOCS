@@ -188,34 +188,34 @@ constexpr std::array<EquationComplementaryTerm, 34> kEquationComplementaryTerms{
     {{0, 0, 0, 0, 1, 0, 0, 0}, 0.0, 0.0, -0.87e-6, 0.0}
 }};
 
-double normalizeAngle(double angle) {
+inline double normalizeAngle(double angle) {
     angle = std::fmod(angle, kTwoPi);
     return angle < 0.0 ? angle + kTwoPi : angle;
 }
 
-double centuriesSinceJ2000(const JulianDate& date) {
+inline double centuriesSinceJ2000(const JulianDate& date) {
     return ((date.part1 - SimConstants::kJulianDateJ2000toJulianDate) + date.part2) / kDaysPerCentury;
 }
 
-Eigen::Matrix3d rotationX(double angle) {
+inline Eigen::Matrix3d rotationX(double angle) {
     return MatrixRotation::rotationX(-angle);
 }
 
-Eigen::Matrix3d rotationY(double angle) {
+inline Eigen::Matrix3d rotationY(double angle) {
     return MatrixRotation::rotationY(-angle);
 }
 
-Eigen::Matrix3d rotationZ(double angle) {
+inline Eigen::Matrix3d rotationZ(double angle) {
     return MatrixRotation::rotationZ(-angle);
 }
 
-double delaunayArgument(double constantArcseconds, double rateArcseconds,
-                        double t) {
+inline double delaunayArgument(double constantArcseconds, double rateArcseconds,
+                               double t) {
     return std::fmod(constantArcseconds + rateArcseconds * t, 1296000.0) *
            kArcsecondsToRadians;
 }
 
-NutationAngles nutationIau2000B(const JulianDate& tt) {
+inline NutationAngles nutationIau2000B(const JulianDate& tt) {
     const double t = centuriesSinceJ2000(tt);
     const double l = delaunayArgument(485868.249036, 1717915923.2178, t);
     const double lp = delaunayArgument(1287104.79305, 129596581.0481, t);
@@ -244,7 +244,7 @@ NutationAngles nutationIau2000B(const JulianDate& tt) {
     };
 }
 
-double equationComplementaryTerms(const JulianDate& tt) {
+inline double equationComplementaryTerms(const JulianDate& tt) {
     const double t = centuriesSinceJ2000(tt);
     const std::array<double, 8> arguments{{
         delaunayArgument(485868.249036 + 31.8792 * t * t +
@@ -280,7 +280,7 @@ double equationComplementaryTerms(const JulianDate& tt) {
     return sum * kArcsecondsToRadians;
 }
 
-double earthRotationAngle(const JulianDate& ut1) {
+inline double earthRotationAngle(const JulianDate& ut1) {
     double first = ut1.part1;
     double second = ut1.part2;
     if (first > second) {
@@ -292,7 +292,7 @@ double earthRotationAngle(const JulianDate& ut1) {
         (fractionalDay + 0.7790572732640 + 0.00273781191135448 * daysSinceJ2000));
 }
 
-void validateDate(const JulianDate& date) {
+inline void validateDate(const JulianDate& date) {
     if (!std::isfinite(date.part1) || !std::isfinite(date.part2)) {
         throw std::invalid_argument("Julian date parts must be finite");
     }

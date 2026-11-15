@@ -1,4 +1,5 @@
 #pragma once
+
 #include "include/navigation/orbit_determination.hpp"
 
 class GncConfig {

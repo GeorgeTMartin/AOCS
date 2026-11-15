@@ -1,26 +1,50 @@
 #pragma once
 
-#include <Eigen/Dense>
+#include <array>
 #include <cerrno>
 #include <cstring>
+#include <cstdint>
 #include <fcntl.h>
+#include <functional>
 #include <new>
 #include <stdexcept>
 #include <string>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <utility>
 
 #define SHM_NAME "/sim_shm_w0"
 
+namespace aocs::ipc {
+
+inline constexpr double kGpsSecondsAtJ2000 = 630763200.0;
+inline constexpr std::size_t kStateDimension = 6;
+
+}
+
 struct sensorMessage {
-    Eigen::Vector3d GPS_position_ECEF = Eigen::Vector3d::Zero();
-    Eigen::Vector3d GPS_velocity_ECEF = Eigen::Vector3d::Zero();
+    std::array<double, 3> GPS_position_ECEF_m{};
+    std::array<double, 3> GPS_velocity_ECEF_m_s{};
     double GPS_time_s = 0.0;
+    double aocs_time_J2000_s = 0.0;
+    std::uint32_t has_new_GPS_measurement = 0;
+    std::array<double, aocs::ipc::kStateDimension * aocs::ipc::kStateDimension>
+        GPS_covariance_row_major{};
+};
+
+struct navigationEstimateMessage {
+    std::uint32_t valid = 0;
+    double time_J2000_s = 0.0;
+    std::array<double, 3> position_ECI_m{};
+    std::array<double, 3> velocity_ECI_m_s{};
+    std::array<double, aocs::ipc::kStateDimension * aocs::ipc::kStateDimension>
+        covariance_row_major{};
 };
 
 struct sharedMemoryMap {
     sensorMessage sensorData;
+    navigationEstimateMessage navigationEstimate;
 };
 
 class SharedMemoryRegion {
@@ -103,10 +127,10 @@ public:
 
 class SharedMemoryGncTransport final : public GncTransport {
 public:
-    using GncEntryPoint = int (*)(sharedMemoryMap&);
+    using GncEntryPoint = std::function<int(sharedMemoryMap&)>;
 
     SharedMemoryGncTransport(sharedMemoryMap& memory, GncEntryPoint gncEntryPoint)
-        : memory_(memory), gncEntryPoint_(gncEntryPoint) {
+        : memory_(memory), gncEntryPoint_(std::move(gncEntryPoint)) {
         if (!gncEntryPoint_) {
             throw std::invalid_argument("GNC entry point must not be null");
         }
