@@ -263,6 +263,13 @@ void testGncStateEstimatePublication() {
         memory.navigationEstimate.position_ECI_m[2]);
     require((propagatedPosition - expectedPosition).norm() > 1.0,
             "GNC must propagate position between GPS updates");
+    const double largestCovarianceMagnitude =
+        Eigen::Map<const Eigen::Matrix<double, 6, 6, Eigen::RowMajor>>(
+            memory.navigationEstimate.covariance_row_major.data())
+            .cwiseAbs()
+            .maxCoeff();
+    require(largestCovarianceMagnitude < 10.0,
+            "Gravity-gradient covariance propagation must remain bounded for a 0.1 s step");
 }
 
 }  // namespace

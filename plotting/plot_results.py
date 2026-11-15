@@ -260,6 +260,14 @@ def covariance_columns():
     return [f"cov_{row}_{col}" for row in range(6) for col in range(6)]
 
 
+def downsample_for_plotting(df, max_points=6000):
+    if len(df) <= max_points:
+        return df
+    stride = int(np.ceil(len(df) / max_points))
+    indices = np.unique(np.append(np.arange(0, len(df), stride), len(df) - 1))
+    return df.iloc[indices].copy()
+
+
 def ellipsoid_surface(covariance, scale, unit_x, unit_y, unit_z):
     symmetric_covariance = 0.5 * (covariance + covariance.T)
     eigenvalues, eigenvectors = np.linalg.eigh(symmetric_covariance)
@@ -553,8 +561,9 @@ def main():
     if df.empty:
         raise ValueError(f"{args.input} contains no simulation samples")
 
-    state_fig = build_state_figure(df)
-    covariance_fig = build_covariance_figure(df)
+    plot_df = downsample_for_plotting(df)
+    state_fig = build_state_figure(plot_df)
+    covariance_fig = build_covariance_figure(plot_df)
     state_html = state_fig.to_html(
         full_html=False,
         include_plotlyjs=True,
@@ -587,15 +596,17 @@ body {{ margin: 0; background: {BACKGROUND}; color: {TEXT}; font-family: monospa
 </head>
 <body>
 <nav class="tabs">
-  <button class="tab-button active" onclick="showTab('state-tab', this)">STATE &amp; ORBIT</button>
-  <button class="tab-button" onclick="showTab('covariance-tab', this)">COVARIANCE</button>
+  <button class="tab-button active" data-tab="state-tab">STATE &amp; ORBIT</button>
+  <button class="tab-button" data-tab="covariance-tab">COVARIANCE</button>
 </nav>
 <main>
   <section id="state-tab" class="tab-content active">{state_html}</section>
   <section id="covariance-tab" class="tab-content">{covariance_html}</section>
 </main>
 <script>
-function showTab(tabId, button) {{
+document.querySelectorAll('.tab-button').forEach((button) => {{
+  button.addEventListener('click', () => {{
+    const tabId = button.dataset.tab;
   document.querySelectorAll('.tab-content').forEach((tab) => tab.classList.remove('active'));
   document.querySelectorAll('.tab-button').forEach((tabButton) => tabButton.classList.remove('active'));
   document.getElementById(tabId).classList.add('active');
@@ -605,7 +616,8 @@ function showTab(tabId, button) {{
       Plotly.Plots.resize(plot);
     }});
   }}, 50);
-}}
+  }});
+}});
 </script>
 </body>
 </html>

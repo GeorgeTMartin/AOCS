@@ -33,33 +33,36 @@ void OrbitDetermination::PropagateTo(double t_J2000_s) {
 }
 
 void OrbitDetermination::PropagateInertialState(const InertialStateEstimate& state, double t_start_J2000_s, double t_end_J2000_s) {
-    // Propagate state with nonlinear dynamics
-
-    const double radius_m = state.vec3_r_sc_eci.norm();
+    const Eigen::Vector3d positionAtStart_eci_m = state.vec3_r_sc_eci;
+    const Eigen::Vector3d velocityAtStart_eci_m_s = state.vec3_v_sc_eci;
+    const double radius_m = positionAtStart_eci_m.norm();
+    const double elapsedTime_s = t_end_J2000_s - t_start_J2000_s;
     const Eigen::Vector3d vec3_a_sc_eci =
-        -flight_constants::kEarthMu * state.vec3_r_sc_eci /
+        -flight_constants::kEarthMu * positionAtStart_eci_m /
         (radius_m * radius_m * radius_m);
 
-    inertialState.vec3_r_sc_eci += state.vec3_v_sc_eci * (t_end_J2000_s - t_start_J2000_s);
-    inertialState.vec3_v_sc_eci += vec3_a_sc_eci * (t_end_J2000_s - t_start_J2000_s);
+    inertialState.vec3_r_sc_eci =
+        positionAtStart_eci_m + velocityAtStart_eci_m_s * elapsedTime_s;
+    inertialState.vec3_v_sc_eci += vec3_a_sc_eci * elapsedTime_s;
     inertialState.t_estimate_J2000_s = t_end_J2000_s;
 
-    // Linearize and Propagate Covariance
-    Eigen::MatrixXd Jacobian = Eigen::MatrixXd::Zero(6, 6);
-    Jacobian.block(0,3,3,3) = Eigen::Matrix3d::Identity();
-    Jacobian(3,0) = flight_constants::kEarthMu * (3.0 * state.vec3_r_sc_eci.x() * state.vec3_r_sc_eci.x() / state.vec3_r_sc_eci.squaredNorm() - 1.0) / state.vec3_r_sc_eci.squaredNorm();
-    Jacobian(3,1) = flight_constants::kEarthMu * 3.0 * state.vec3_r_sc_eci.x() * state.vec3_r_sc_eci.y() / state.vec3_r_sc_eci.squaredNorm();
-    Jacobian(3,2) = flight_constants::kEarthMu * 3.0 * state.vec3_r_sc_eci.x() * state.vec3_r_sc_eci.z() / state.vec3_r_sc_eci.squaredNorm();
-    Jacobian(4,0) = flight_constants::kEarthMu * 3.0 * state.vec3_r_sc_eci.x() * state.vec3_r_sc_eci.y() / state.vec3_r_sc_eci.squaredNorm();
-    Jacobian(4,1) = flight_constants::kEarthMu * (3.0 * state.vec3_r_sc_eci.y() * state.vec3_r_sc_eci.y() / state.vec3_r_sc_eci.squaredNorm() - 1.0) / state.vec3_r_sc_eci.squaredNorm();
-    Jacobian(4,2) = flight_constants::kEarthMu * 3.0 * state.vec3_r_sc_eci.y() * state.vec3_r_sc_eci.z() / state.vec3_r_sc_eci.squaredNorm();
-    Jacobian(5,0) = flight_constants::kEarthMu * 3.0 * state.vec3_r_sc_eci.x() * state.vec3_r_sc_eci.z() / state.vec3_r_sc_eci.squaredNorm();
-    Jacobian(5,1) = flight_constants::kEarthMu * 3.0 * state.vec3_r_sc_eci.y() * state.vec3_r_sc_eci.z() / state.vec3_r_sc_eci.squaredNorm();
-    Jacobian(5,2) = flight_constants::kEarthMu * (3.0 * state.vec3_r_sc_eci.z() * state.vec3_r_sc_eci.z() / state.vec3_r_sc_eci.squaredNorm() - 1.0) / state.vec3_r_sc_eci.squaredNorm();
+    const double radiusSquared_m2 = radius_m * radius_m;
+    const double radiusCubed_m3 = radiusSquared_m2 * radius_m;
+    const Eigen::Matrix3d accelerationGradient =
+        flight_constants::kEarthMu *
+        (3.0 * positionAtStart_eci_m * positionAtStart_eci_m.transpose() /
+             (radiusCubed_m3 * radiusSquared_m2) -
+         Eigen::Matrix3d::Identity() / radiusCubed_m3);
+    Eigen::Matrix<double, 6, 6> dynamicsJacobian =
+        Eigen::Matrix<double, 6, 6>::Zero();
+    dynamicsJacobian.block<3, 3>(0, 3) = Eigen::Matrix3d::Identity();
+    dynamicsJacobian.block<3, 3>(3, 0) = accelerationGradient;
 
-    Eigen::MatrixXd StateTransitionMatrix = Eigen::MatrixXd::Identity(6, 6);
-    StateTransitionMatrix += Jacobian * (t_end_J2000_s - t_start_J2000_s);
-    inertialState.covariance = StateTransitionMatrix * state.covariance * StateTransitionMatrix.transpose();
+    Eigen::Matrix<double, 6, 6> stateTransitionMatrix =
+        Eigen::Matrix<double, 6, 6>::Identity();
+    stateTransitionMatrix += dynamicsJacobian * elapsedTime_s;
+    inertialState.covariance =
+        stateTransitionMatrix * state.covariance * stateTransitionMatrix.transpose();
 
     return;
 }
