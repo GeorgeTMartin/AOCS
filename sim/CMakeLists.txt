@@ -3,7 +3,7 @@ add_executable(sim
     initialization.cpp
 )
 
-configure_file(config.json config.json COPYONLY)
+configure_file(${PROJECT_SOURCE_DIR}/config.json config.json COPYONLY)
 
 set(EIGEN_INCLUDE_DIR
     ${PROJECT_SOURCE_DIR}/shared/external/eigen-5.0.0/eigen-5.0.0
@@ -18,6 +18,7 @@ target_include_directories(sim PRIVATE
     ${PROJECT_SOURCE_DIR}/shared
     ${EIGEN_INCLUDE_DIR}
 )
+target_link_libraries(sim PRIVATE gnc_lib)
 
 find_package(Python3 COMPONENTS Interpreter Development.Module REQUIRED)
 find_package(pybind11 CONFIG REQUIRED)

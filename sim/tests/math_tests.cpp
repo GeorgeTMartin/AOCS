@@ -1,5 +1,7 @@
 #include "environment/earth_rotation/iau2000b.hpp"
+#include "ipc.hpp"
 #include <math/quaternion.hpp>
+#include "simulation/simulation.hpp"
 #include "sim_constants.hpp"
 
 #include <cmath>
@@ -8,6 +10,8 @@
 #include <limits>
 #include <sstream>
 #include <stdexcept>
+#include <string>
+#include <unistd.h>
 
 namespace {
 
@@ -125,12 +129,69 @@ void testIau2000B() {
     require(rejectedNonFinite, "Non-finite polar motion must be rejected");
 }
 
+void testRK4Propagation() {
+    using aocs::simulation::Propagation;
+    using aocs::simulation::SpacecraftState;
+
+    SpacecraftState state{
+        Eigen::Vector3d::UnitX(),
+        Eigen::Vector3d::Zero()};
+    double elapsedTime_s = 0.0;
+    const double dt_sec = 0.1;
+    Propagation propagation;
+    propagation.propagate(
+        state,
+        elapsedTime_s,
+        dt_sec,
+        [](const SpacecraftState& intermediate, double) -> Eigen::Vector3d {
+            return Eigen::Vector3d(-intermediate.position_eci_m);
+        });
+
+    requireNear(state.position_eci_m.x(), std::cos(dt_sec), 1e-7,
+                "RK4 harmonic oscillator position mismatch");
+    requireNear(state.velocity_eci_m_s.x(), -std::sin(dt_sec), 1e-7,
+                "RK4 harmonic oscillator velocity mismatch");
+    requireNear(elapsedTime_s, dt_sec, 0.0,
+                "RK4 propagation must advance elapsed simulation time");
+}
+
+sensorMessage receivedSensorMessage;
+
+int captureSensorMessage(sharedMemoryMap& memory) {
+    receivedSensorMessage = memory.sensorData;
+    return 0;
+}
+
+void testSharedMemoryGncTransport() {
+    const std::string name =
+        "/aocs_ipc_test_" + std::to_string(static_cast<long long>(getpid()));
+    SharedMemoryRegion region(name);
+    SharedMemoryGncTransport transport(region.data(), &captureSensorMessage);
+
+    sensorMessage input;
+    input.GPS_position_ECEF = Eigen::Vector3d(1.0, 2.0, 3.0);
+    input.GPS_velocity_ECEF = Eigen::Vector3d(4.0, 5.0, 6.0);
+    input.GPS_time_s = 7.0;
+    require(transport.exchange(input) == 0,
+            "Shared-memory GNC transport must return the GNC status");
+    require((receivedSensorMessage.GPS_position_ECEF -
+             input.GPS_position_ECEF).norm() == 0.0,
+            "GNC entry point must receive the published GPS position");
+    require((receivedSensorMessage.GPS_velocity_ECEF -
+             input.GPS_velocity_ECEF).norm() == 0.0,
+            "GNC entry point must receive the published GPS velocity");
+    requireNear(receivedSensorMessage.GPS_time_s, input.GPS_time_s, 0.0,
+                "GNC entry point must receive the published GPS time");
+}
+
 }  // namespace
 
 int main() {
     try {
         testQuaternion();
         testIau2000B();
+        testRK4Propagation();
+        testSharedMemoryGncTransport();
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';
         return 1;

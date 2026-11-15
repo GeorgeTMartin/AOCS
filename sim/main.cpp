@@ -1,5 +1,7 @@
 #include "simulation/initialization.hpp"
 #include "environment/earth_rotation/iau2000b.hpp"
+#include "gnc_lib.hpp"
+#include "ipc.hpp"
 #include <Eigen/Dense>
 #include <iostream>
 
@@ -14,13 +16,15 @@ struct ActuatorState {
 };
 
 EnvironmentalParameters fetchEnvironmentalParameters(
-    const aocs::simulation::Simulation& simulation) {
-    const double t_J2000_s = simulation.epoch_J2000_s + simulation.elapsedTime_s;
+    const aocs::simulation::Simulation& simulation,
+    const aocs::simulation::SpacecraftState& state,
+    double elapsedTime_s) {
+    const double t_J2000_s = simulation.epoch_J2000_s + elapsedTime_s;
     const aocs::environment::JulianDate date =
         aocs::environment::JulianDate::fromJ2000Seconds(t_J2000_s);
     const auto earthRotation = aocs::environment::EarthRotation(date, date).reduce();
     const Eigen::Vector3d position_ecef =
-        earthRotation.gcrsToItrs * simulation.state.position_eci_m;
+        earthRotation.gcrsToItrs * state.position_eci_m;
     const Eigen::Vector3d gravityForce_ecef = simulation.gravity->computeGravity(
         position_ecef,
         simulation.mass_kg,
@@ -35,24 +39,31 @@ ActuatorState updateActuatorDynamics(const aocs::simulation::Simulation&) {
     return {};
 }
 
-void propagateState(
-    aocs::simulation::Simulation& simulation,
-    const EnvironmentalParameters& environment,
-    const ActuatorState& actuators) {
-    const Eigen::Vector3d acceleration_eci_m_s2 =
-        (environment.gravityForce_eci_N + actuators.force_eci_N) / simulation.mass_kg;
-    simulation.state.velocity_eci_m_s += acceleration_eci_m_s2 * simulation.dt_sec;
-    simulation.state.position_eci_m +=
-        simulation.state.velocity_eci_m_s * simulation.dt_sec;
-    simulation.elapsedTime_s += simulation.dt_sec;
+sensorMessage updateSensorModels(
+    const aocs::simulation::Simulation& simulation) {
+    const double t_J2000_s =
+        simulation.epoch_J2000_s + simulation.elapsedTime_s;
+    const aocs::environment::JulianDate date =
+        aocs::environment::JulianDate::fromJ2000Seconds(t_J2000_s);
+    const auto earthRotation =
+        aocs::environment::EarthRotation(date, date).reduce();
+    const Eigen::Vector3d position_ecef_m =
+        earthRotation.gcrsToItrs * simulation.state.position_eci_m;
+    const Eigen::Vector3d earthAngularVelocity_ecef_rad_s(
+        0.0, 0.0, 7.2921150e-5);
+
+    sensorMessage sensors;
+    sensors.GPS_position_ECEF = position_ecef_m;
+    sensors.GPS_velocity_ECEF =
+        earthRotation.gcrsToItrs * simulation.state.velocity_eci_m_s -
+        earthAngularVelocity_ecef_rad_s.cross(position_ecef_m);
+    constexpr double kGpsSecondsAtJ2000 = 630763200.0;
+    sensors.GPS_time_s = t_J2000_s + kGpsSecondsAtJ2000;
+    return sensors;
 }
 
-void updateSensorModels(const aocs::simulation::Simulation&) {
-    // Sensor models are not configured yet.
-}
-
-void runAOCSLoop(aocs::simulation::Simulation&) {
-    // The AOCS interface is not connected yet.
+int runAOCSLoop(GncTransport& transport, const sensorMessage& sensors) {
+    return transport.exchange(sensors);
 }
 
 void writeState(aocs::simulation::Simulation& simulation) {
@@ -73,25 +84,47 @@ int main() {
         return 1;
     }
 
-    while (simulation->running) {
-        const EnvironmentalParameters environment =
-            fetchEnvironmentalParameters(*simulation);
-        const ActuatorState actuators = updateActuatorDynamics(*simulation);
-        propagateState(*simulation, environment, actuators);
-        updateSensorModels(*simulation);
-        runAOCSLoop(*simulation);
+    try {
+        SharedMemoryRegion sharedMemory;
+        SharedMemoryGncTransport transport(
+            sharedMemory.data(), &aocs::main);
 
-        writeState(*simulation);
+        while (simulation->running) {
+            const ActuatorState actuators = updateActuatorDynamics(*simulation);
+            simulation->propagation.propagate(
+                simulation->state,
+                simulation->elapsedTime_s,
+                simulation->dt_sec,
+                [&](const aocs::simulation::SpacecraftState& state, double elapsedTime_s)
+                    -> Eigen::Vector3d {
+                    const EnvironmentalParameters environment =
+                        fetchEnvironmentalParameters(*simulation, state, elapsedTime_s);
+                    return Eigen::Vector3d(
+                        (environment.gravityForce_eci_N + actuators.force_eci_N) /
+                        simulation->mass_kg);
+                });
+            const sensorMessage sensors = updateSensorModels(*simulation);
+            if (runAOCSLoop(transport, sensors) != 0) {
+                std::cerr << "GNC loop reported a failure\n";
+                return 1;
+            }
 
-        if (simulation->elapsedTime_s >= simulation->simulationLength_s) {
-            std::cout << "Simulation ended at time: "
-                      << simulation->elapsedTime_s << " sec\n";
-            std::cout << "Final position: "
-                      << simulation->state.position_eci_m.transpose() << "\n";
-            std::cout << "Final velocity: "
-                      << simulation->state.velocity_eci_m_s.transpose() << "\n";
-            simulation->running = false;
+            writeState(*simulation);
+
+            if (simulation->elapsedTime_s >= simulation->simulationLength_s) {
+                std::cout << "Simulation ended at time: "
+                          << simulation->elapsedTime_s << " sec\n";
+                std::cout << "Final position: "
+                          << simulation->state.position_eci_m.transpose() << "\n";
+                std::cout << "Final velocity: "
+                          << simulation->state.velocity_eci_m_s.transpose() << "\n";
+                simulation->running = false;
+            }
         }
+    } catch (const std::exception& error) {
+        std::cerr << "Simulation/GNC shared-memory failure: "
+                  << error.what() << '\n';
+        return 1;
     }
 
     return 0;

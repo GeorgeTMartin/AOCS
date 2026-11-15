@@ -1,5 +1,10 @@
-add_library(gnc_lib INTERFACE)
+add_library(gnc_lib STATIC
+    main.cpp
+    src/navigation/orbit_determination.cpp
+)
 
-target_include_directories(gnc_lib INTERFACE
+target_include_directories(gnc_lib PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${PROJECT_SOURCE_DIR}/shared
+    ${PROJECT_SOURCE_DIR}/shared/external/eigen-5.0.0/eigen-5.0.0
 )

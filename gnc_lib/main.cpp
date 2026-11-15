@@ -1,7 +1,11 @@
-/*
-    Satellite AOCS
-    Guidance, Navigation, and Control Library
+#include "gnc_lib.hpp"
 
-    This library provides the necessary functions and algorithms for the guidance, navigation, and control of a satellite.
+namespace aocs {
 
-*/
+int main(sharedMemoryMap& sharedMemory) {
+    (void)sharedMemory;
+
+    return 0;
+}
+
+} // namespace aocs

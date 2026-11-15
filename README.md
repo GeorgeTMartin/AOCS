@@ -24,6 +24,15 @@ Run the simulation from the repository root:
 ./build/sim/sim
 ```
 
+## Simulation and GNC interface
+
+The simulation publishes its GPS position, GPS velocity, and GPS time inputs
+to a POSIX shared-memory region, then calls `aocs::gnc::main` through the
+`GncTransport` interface. The current GNC entry point is intentionally a
+no-op scaffold. The shared-memory transport is synchronous and in-process for
+now; a future UDP transport can implement the same interface when GNC runs in
+a separate container.
+
 ## Analysis
 
 Requirements: Python 3.14 or newer

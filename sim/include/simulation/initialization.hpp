@@ -1,19 +1,15 @@
 #pragma once
 
 #include "environment/earth_gravity/gravity.hpp"
-#include <Eigen/Dense>
+#include "simulation/simulation.hpp"
 #include <cstdint>
 #include <fstream>
 #include <memory>
 
 namespace aocs::simulation {
 
-struct SpacecraftState {
-    Eigen::Vector3d position_eci_m;
-    Eigen::Vector3d velocity_eci_m_s;
-};
-
 struct Simulation {
+    Propagation propagation;
     SpacecraftState state;
     double epoch_J2000_s = 0.0;
     double elapsedTime_s = 0.0;
