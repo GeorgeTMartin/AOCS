@@ -9,6 +9,7 @@
 #include <new>
 #include <stdexcept>
 #include <string>
+#include <sys/file.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -50,12 +51,22 @@ struct sharedMemoryMap {
 class SharedMemoryRegion {
 public:
     explicit SharedMemoryRegion(const std::string& name = SHM_NAME) : name_(name) {
-        descriptor_ = shm_open(name_.c_str(), O_CREAT | O_EXCL | O_RDWR, 0600);
+        descriptor_ = shm_open(name_.c_str(), O_CREAT | O_RDWR, 0600);
         if (descriptor_ == -1) {
             throw std::runtime_error(
                 "Unable to create shared memory " + name_ + ": " +
                 std::strerror(errno));
         }
+
+        if (flock(descriptor_, LOCK_EX | LOCK_NB) == -1) {
+            const int error = errno;
+            close(descriptor_);
+            descriptor_ = -1;
+            throw std::runtime_error(
+                "Unable to lock shared memory " + name_ + ": " +
+                std::strerror(error));
+        }
+        lockHeld_ = true;
 
         if (ftruncate(descriptor_, sizeof(sharedMemoryMap)) == -1) {
             const int error = errno;
@@ -104,19 +115,24 @@ public:
 
 private:
     void cleanup() {
-        if (descriptor_ != -1) {
-            close(descriptor_);
-            descriptor_ = -1;
-        }
-        if (!name_.empty()) {
+        if (lockHeld_ && !name_.empty()) {
             shm_unlink(name_.c_str());
             name_.clear();
+        }
+        if (descriptor_ != -1) {
+            if (lockHeld_) {
+                flock(descriptor_, LOCK_UN);
+                lockHeld_ = false;
+            }
+            close(descriptor_);
+            descriptor_ = -1;
         }
     }
 
     std::string name_;
     int descriptor_ = -1;
     sharedMemoryMap* data_ = nullptr;
+    bool lockHeld_ = false;
 };
 
 class GncTransport {

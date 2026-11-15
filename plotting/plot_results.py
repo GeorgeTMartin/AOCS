@@ -43,23 +43,6 @@ def build_state_figure(df):
         [{"type": "xy"}, {"type": "xy"}, {"type": "xy"}],
         [{"type": "xy"}, {"type": "xy"}, {"type": "xy"}],
     ]
-    titles = [
-        "ECI Orbit",
-        "X Position",
-        "X Velocity",
-        "",
-        "Y Position",
-        "Y Velocity",
-        "",
-        "Z Position",
-        "Z Velocity",
-        "Semi-major Axis",
-        "Eccentricity",
-        "Inclination",
-        "RAAN",
-        "Argument of Periapsis",
-        "True Anomaly",
-    ]
     fig = make_subplots(
         rows=5,
         cols=3,
@@ -68,8 +51,37 @@ def build_state_figure(df):
         column_widths=[0.40, 0.30, 0.30],
         horizontal_spacing=0.055,
         vertical_spacing=0.055,
-        subplot_titles=titles,
     )
+    panel_titles = [
+        (1, 1, "ECI Orbit"),
+        (1, 2, "X Position"),
+        (1, 3, "X Velocity"),
+        (2, 2, "Y Position"),
+        (2, 3, "Y Velocity"),
+        (3, 2, "Z Position"),
+        (3, 3, "Z Velocity"),
+        (4, 1, "Semi-major Axis"),
+        (4, 2, "Eccentricity"),
+        (4, 3, "Inclination"),
+        (5, 1, "RAAN"),
+        (5, 2, "Argument of Periapsis"),
+        (5, 3, "True Anomaly"),
+    ]
+    for row, col, title in panel_titles:
+        subplot = fig.get_subplot(row, col)
+        if row == 1 and col == 1:
+            x_domain, y_domain = subplot.domain.x, subplot.domain.y
+        else:
+            x_domain, y_domain = subplot.xaxis.domain, subplot.yaxis.domain
+        fig.add_annotation(
+            x=(x_domain[0] + x_domain[1]) / 2.0,
+            y=y_domain[1] + 0.008,
+            xref="paper",
+            yref="paper",
+            text=title,
+            showarrow=False,
+            yanchor="bottom",
+        )
 
     latitude = np.linspace(-np.pi / 2.0, np.pi / 2.0, 40)
     longitude = np.linspace(0.0, 2.0 * np.pi, 80)
@@ -88,7 +100,7 @@ def build_state_figure(df):
             cmin=-np.pi / 2.0,
             cmax=np.pi / 2.0,
             showscale=False,
-            opacity=0.98,
+            opacity=0.78,
             hovertemplate="Earth<extra></extra>",
             name="Earth",
         ),
@@ -102,7 +114,7 @@ def build_state_figure(df):
             y=position_km[:, 1],
             z=position_km[:, 2],
             mode="lines",
-            line={"color": PEARL, "width": 4},
+            line={"color": AMBER, "width": 5},
             name="Orbit",
             hovertemplate=(
                 "x=%{x:.1f} km<br>y=%{y:.1f} km<br>"

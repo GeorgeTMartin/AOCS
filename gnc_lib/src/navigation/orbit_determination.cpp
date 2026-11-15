@@ -6,10 +6,19 @@
 #include "flight_constants.hpp"
 
 
-OrbitDetermination::OrbitDetermination(OrbitDeterminationMethod method)
+OrbitDetermination::OrbitDetermination(
+    OrbitDeterminationMethod method,
+    double accelerationProcessNoiseSpectralDensity_m2_s3)
     : method(method),
+      accelerationProcessNoiseSpectralDensity_m2_s3(
+          accelerationProcessNoiseSpectralDensity_m2_s3),
       inertialState{0.0, Eigen::Vector3d::Zero(), Eigen::Vector3d::Zero(), Eigen::MatrixXd::Identity(6, 6)},
       measurement{0.0, Eigen::Vector3d::Zero(), Eigen::Vector3d::Zero(), Eigen::MatrixXd::Identity(6, 6)} {
+    if (!std::isfinite(accelerationProcessNoiseSpectralDensity_m2_s3) ||
+        accelerationProcessNoiseSpectralDensity_m2_s3 < 0.0) {
+        throw std::invalid_argument(
+            "Acceleration process-noise spectral density must be finite and non-negative");
+    }
     if (method == OrbitDeterminationMethod::ExtendedKalmanFilter) {
         // Initialize EKF specific variables, if any
     } else if (method == OrbitDeterminationMethod::UnscentedKalmanFilter) {
@@ -32,19 +41,24 @@ void OrbitDetermination::PropagateTo(double t_J2000_s) {
         inertialState, inertialState.t_estimate_J2000_s, t_J2000_s);
 }
 
-void OrbitDetermination::PropagateInertialState(const InertialStateEstimate& state, double t_start_J2000_s, double t_end_J2000_s) {
+void OrbitDetermination::PropagateInertialState(
+    InertialStateEstimate& state,
+    double t_start_J2000_s,
+    double t_end_J2000_s) {
     const Eigen::Vector3d positionAtStart_eci_m = state.vec3_r_sc_eci;
     const Eigen::Vector3d velocityAtStart_eci_m_s = state.vec3_v_sc_eci;
+    const Eigen::MatrixXd covarianceAtStart = state.covariance;
     const double radius_m = positionAtStart_eci_m.norm();
     const double elapsedTime_s = t_end_J2000_s - t_start_J2000_s;
     const Eigen::Vector3d vec3_a_sc_eci =
         -flight_constants::kEarthMu * positionAtStart_eci_m /
         (radius_m * radius_m * radius_m);
 
-    inertialState.vec3_r_sc_eci =
+    state.vec3_r_sc_eci =
         positionAtStart_eci_m + velocityAtStart_eci_m_s * elapsedTime_s;
-    inertialState.vec3_v_sc_eci += vec3_a_sc_eci * elapsedTime_s;
-    inertialState.t_estimate_J2000_s = t_end_J2000_s;
+    state.vec3_v_sc_eci =
+        velocityAtStart_eci_m_s + vec3_a_sc_eci * elapsedTime_s;
+    state.t_estimate_J2000_s = t_end_J2000_s;
 
     const double radiusSquared_m2 = radius_m * radius_m;
     const double radiusCubed_m3 = radiusSquared_m2 * radius_m;
@@ -61,8 +75,24 @@ void OrbitDetermination::PropagateInertialState(const InertialStateEstimate& sta
     Eigen::Matrix<double, 6, 6> stateTransitionMatrix =
         Eigen::Matrix<double, 6, 6>::Identity();
     stateTransitionMatrix += dynamicsJacobian * elapsedTime_s;
-    inertialState.covariance =
-        stateTransitionMatrix * state.covariance * stateTransitionMatrix.transpose();
+    Eigen::Matrix<double, 6, 6> processNoise =
+        Eigen::Matrix<double, 6, 6>::Zero();
+    const Eigen::Matrix3d identity = Eigen::Matrix3d::Identity();
+    const double spectralDensity =
+        accelerationProcessNoiseSpectralDensity_m2_s3;
+    processNoise.block<3, 3>(0, 0) =
+        identity * (spectralDensity * elapsedTime_s * elapsedTime_s *
+                    elapsedTime_s / 3.0);
+    processNoise.block<3, 3>(0, 3) =
+        identity * (spectralDensity * elapsedTime_s * elapsedTime_s / 2.0);
+    processNoise.block<3, 3>(3, 0) =
+        identity * (spectralDensity * elapsedTime_s * elapsedTime_s / 2.0);
+    processNoise.block<3, 3>(3, 3) =
+        identity * (spectralDensity * elapsedTime_s);
+    state.covariance =
+        stateTransitionMatrix * covarianceAtStart *
+            stateTransitionMatrix.transpose() +
+        processNoise;
 
     return;
 }

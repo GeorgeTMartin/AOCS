@@ -16,7 +16,9 @@ struct InertialStateEstimate {
 
 class OrbitDetermination {
 public:
-    explicit OrbitDetermination(OrbitDeterminationMethod method);
+    explicit OrbitDetermination(
+        OrbitDeterminationMethod method,
+        double accelerationProcessNoiseSpectralDensity_m2_s3);
     void InitializeInertialState(const InertialStateEstimate& initialEstimate);
     void PropagateTo(double t_J2000_s);
     void UpdateInertialState(InertialStateEstimate& measurement, double& t_J2000_s);
@@ -24,11 +26,15 @@ public:
     Eigen::Vector3d& calculateAcceleration(const Eigen::Vector3d& vec3_r_sc_eci, const Eigen::Vector3d& vec3_v_sc_eci, double t_start_J2000_s, double t_end_J2000_s);
 
 private:
-    void PropagateInertialState(const InertialStateEstimate& state, double t_start_J2000_s, double t_end_J2000_s);
+    void PropagateInertialState(
+        InertialStateEstimate& state,
+        double t_start_J2000_s,
+        double t_end_J2000_s);
     void MeasurementUpdate(
         InertialStateEstimate& estimate,
         const InertialStateEstimate& measurement);
     OrbitDeterminationMethod method;
+    double accelerationProcessNoiseSpectralDensity_m2_s3;
     InertialStateEstimate inertialState;
     InertialStateEstimate measurement;
 };

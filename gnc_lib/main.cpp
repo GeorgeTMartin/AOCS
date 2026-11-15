@@ -5,6 +5,7 @@
 #include <Eigen/Dense>
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 namespace aocs {
 namespace {
@@ -44,10 +45,9 @@ void publishNavigationEstimate(
 
 } // namespace
 
-GncState initializeGnc() {
-    return {
-        OrbitDetermination(GncConfig::orbitDeterminationMethod)
-    };
+GncState initializeGnc(
+    double accelerationProcessNoiseSpectralDensity_m2_s3) {
+    return GncState(accelerationProcessNoiseSpectralDensity_m2_s3);
 }
 
 int runGncStep(GncState& state, sharedMemoryMap& sharedMemory) {
@@ -58,6 +58,16 @@ int runGncStep(GncState& state, sharedMemoryMap& sharedMemory) {
         sensors.aocs_time_J2000_s;
     double gpsTime_J2000_s =
         sensors.GPS_time_s - ipc::kGpsSecondsAtJ2000;
+    if (sensors.has_new_GPS_measurement != 0) {
+        const double gpsTimeResolution_s =
+            4.0 * std::numeric_limits<double>::epsilon() *
+            std::max(std::abs(sensors.GPS_time_s),
+                     ipc::kGpsSecondsAtJ2000);
+        if (std::abs(gpsTime_J2000_s - t_J2000_s) <=
+            gpsTimeResolution_s) {
+            gpsTime_J2000_s = t_J2000_s;
+        }
+    }
     const environment::JulianDate date = environment::JulianDate::fromJ2000Seconds(
         sensors.GPS_time_s - ipc::kGpsSecondsAtJ2000);
     const auto earthRotation = environment::EarthRotation(date, date).reduce();

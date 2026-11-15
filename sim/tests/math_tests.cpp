@@ -193,6 +193,36 @@ void testSharedMemoryGncTransport() {
         "GNC entry point must receive the GPS covariance");
 }
 
+void testSharedMemoryRegionRecoversStaleObject() {
+    const std::string name =
+        "/aocs_stale_shm_test_" + std::to_string(static_cast<long long>(getpid()));
+    const int staleDescriptor = shm_open(
+        name.c_str(), O_CREAT | O_EXCL | O_RDWR, 0600);
+    require(staleDescriptor != -1,
+            "Test must create a stale shared-memory object");
+    require(ftruncate(staleDescriptor, sizeof(sharedMemoryMap)) == 0,
+            "Test must size its stale shared-memory object");
+    close(staleDescriptor);
+
+    {
+        SharedMemoryRegion recoveredRegion(name);
+        require(recoveredRegion.data().navigationEstimate.valid == 0,
+        "Stale shared-memory contents must be reinitialized");
+        bool rejectedConcurrentOwner = false;
+        try {
+            SharedMemoryRegion concurrentRegion(name);
+        } catch (const std::runtime_error&) {
+            rejectedConcurrentOwner = true;
+        }
+        require(rejectedConcurrentOwner,
+        "A second owner must not attach while the region is in use");
+    }
+
+    const int missingDescriptor = shm_open(name.c_str(), O_RDWR, 0600);
+    require(missingDescriptor == -1 && errno == ENOENT,
+            "Destroying the region must unlink its shared-memory object");
+}
+
 void testGncStateEstimatePublication() {
     aocs::GncState state = aocs::initializeGnc();
     sharedMemoryMap memory{};
@@ -208,6 +238,7 @@ void testGncStateEstimatePublication() {
             axis * aocs::ipc::kStateDimension + axis] = 1.0;
     }
     input.GPS_covariance_row_major[1] = 0.25;
+    input.GPS_covariance_row_major[aocs::ipc::kStateDimension] = 0.25;
 
     require(aocs::runGncStep(state, memory) == 0,
             "GNC step must publish its initial GPS-based estimate");
@@ -270,6 +301,25 @@ void testGncStateEstimatePublication() {
             .maxCoeff();
     require(largestCovarianceMagnitude < 10.0,
             "Gravity-gradient covariance propagation must remain bounded for a 0.1 s step");
+    require(
+        memory.navigationEstimate.covariance_row_major[3 * 6 + 3] > 1.0,
+        "Acceleration process noise must contribute to propagated velocity covariance");
+
+    input.aocs_time_J2000_s = t_J2000_s + 0.2;
+    input.GPS_time_s =
+        input.aocs_time_J2000_s + aocs::ipc::kGpsSecondsAtJ2000;
+    input.has_new_GPS_measurement = 1;
+    const double covarianceBeforeGpsUpdate =
+        Eigen::Map<const Eigen::Matrix<double, 6, 6, Eigen::RowMajor>>(
+            memory.navigationEstimate.covariance_row_major.data())(0, 0);
+    require(aocs::runGncStep(state, memory) == 0,
+            "GNC must process a subsequent GPS update");
+    const double covarianceAfterGpsUpdate =
+        Eigen::Map<const Eigen::Matrix<double, 6, 6, Eigen::RowMajor>>(
+            memory.navigationEstimate.covariance_row_major.data())(0, 0);
+    require(covarianceAfterGpsUpdate > 0.5 &&
+                covarianceAfterGpsUpdate < covarianceBeforeGpsUpdate,
+            "GPS update must reduce the propagated covariance without replacing the prior covariance");
 }
 
 }  // namespace
@@ -280,6 +330,7 @@ int main() {
         testIau2000B();
         testRK4Propagation();
         testSharedMemoryGncTransport();
+        testSharedMemoryRegionRecoversStaleObject();
         testGncStateEstimatePublication();
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';

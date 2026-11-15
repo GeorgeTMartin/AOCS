@@ -79,6 +79,13 @@ std::unique_ptr<Simulation> initializeSimulation() {
     }
     const double aocsRate_Hz = simulationConfig["aocs_rate_hz"].asDouble();
     const double gpsRate_Hz = simulationConfig["gps_rate_hz"].asDouble();
+    const Json::Value& gncConfig = config["gnc"];
+    if (!gncConfig["acceleration_process_noise_spectral_density_m2_s3"].isNumeric()) {
+        std::cerr << "gnc.acceleration_process_noise_spectral_density_m2_s3 must be numeric\n";
+        return nullptr;
+    }
+    simulation->gncAccelerationProcessNoiseSpectralDensity_m2_s3 =
+        gncConfig["acceleration_process_noise_spectral_density_m2_s3"].asDouble();
     simulation->mass_kg = config["spacecraft"]["mass_kg"].asDouble();
     if (!std::isfinite(simulation->epoch_J2000_s)) {
         std::cerr << "simulation.initial_conditions.t_J2000_s must be finite\n";
@@ -86,11 +93,15 @@ std::unique_ptr<Simulation> initializeSimulation() {
     }
     if (!std::isfinite(aocsRate_Hz) ||
         !std::isfinite(gpsRate_Hz) ||
+        !std::isfinite(
+            simulation->gncAccelerationProcessNoiseSpectralDensity_m2_s3) ||
         !std::isfinite(simulation->mass_kg) ||
         aocsRate_Hz <= 0.0 ||
         gpsRate_Hz <= 0.0 ||
+        simulation->gncAccelerationProcessNoiseSpectralDensity_m2_s3 < 0.0 ||
         simulation->mass_kg <= 0.0) {
-        std::cerr << "AOCS/GPS rates and spacecraft mass must be valid positive values\n";
+        std::cerr << "AOCS/GPS rates and spacecraft mass must be positive; "
+                     "GNC process-noise spectral density must be finite and non-negative\n";
         return nullptr;
     }
     const double gpsIntervalSteps = aocsRate_Hz / gpsRate_Hz;

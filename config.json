@@ -18,5 +18,8 @@
             "degree": 2,
             "order": 0
         }
+    },
+    "gnc": {
+        "acceleration_process_noise_spectral_density_m2_s3": 0.0001
     }
 }

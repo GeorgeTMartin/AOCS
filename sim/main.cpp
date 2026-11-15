@@ -115,7 +115,8 @@ int main() {
 
     try {
         SharedMemoryRegion sharedMemory;
-        aocs::GncState gncState = aocs::initializeGnc();
+        aocs::GncState gncState = aocs::initializeGnc(
+            simulation->gncAccelerationProcessNoiseSpectralDensity_m2_s3);
         SharedMemoryGncTransport transport(
             sharedMemory.data(),
             [&gncState](sharedMemoryMap& memory) {

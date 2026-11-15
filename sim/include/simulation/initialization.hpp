@@ -16,6 +16,7 @@ struct Simulation {
     double simulationLength_s = 0.0;
     double dt_sec = 0.0;
     std::uint64_t gpsSampleIntervalSteps = 0;
+    double gncAccelerationProcessNoiseSpectralDensity_m2_s3 = 0.0;
     double mass_kg = 0.0;
     GravityModel gravityModel = GravityModel::E_PointMass;
     std::uint32_t gravityDegree = 0;
