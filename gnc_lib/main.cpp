@@ -1,6 +1,7 @@
 #include "gnc_lib.hpp"
 #include "gnc_config.hpp"
 #include "environment/earth_rotation/iau2000b.hpp"
+#include "flight_constants.hpp"
 
 #include <Eigen/Dense>
 #include <algorithm>
@@ -45,9 +46,8 @@ void publishNavigationEstimate(
 
 } // namespace
 
-GncState initializeGnc(
-    double accelerationProcessNoiseSpectralDensity_m2_s3) {
-    return GncState(accelerationProcessNoiseSpectralDensity_m2_s3);
+GncState initializeGnc() {
+    return GncState();
 }
 
 int runGncStep(GncState& state, sharedMemoryMap& sharedMemory) {
@@ -57,19 +57,19 @@ int runGncStep(GncState& state, sharedMemoryMap& sharedMemory) {
     const double t_J2000_s =
         sensors.aocs_time_J2000_s;
     double gpsTime_J2000_s =
-        sensors.GPS_time_s - ipc::kGpsSecondsAtJ2000;
+        sensors.GPS_time_s - flight_constants::kGPSSecondsAtJ2000;
     if (sensors.has_new_GPS_measurement != 0) {
         const double gpsTimeResolution_s =
             4.0 * std::numeric_limits<double>::epsilon() *
             std::max(std::abs(sensors.GPS_time_s),
-                     ipc::kGpsSecondsAtJ2000);
+                     flight_constants::kGPSSecondsAtJ2000);
         if (std::abs(gpsTime_J2000_s - t_J2000_s) <=
             gpsTimeResolution_s) {
             gpsTime_J2000_s = t_J2000_s;
         }
     }
     const environment::JulianDate date = environment::JulianDate::fromJ2000Seconds(
-        sensors.GPS_time_s - ipc::kGpsSecondsAtJ2000);
+        sensors.GPS_time_s - flight_constants::kGPSSecondsAtJ2000);
     const auto earthRotation = environment::EarthRotation(date, date).reduce();
     const Eigen::Matrix3d& gcrsToItrs = earthRotation.gcrsToItrs;
     const Eigen::Matrix3d& itrsToGcrs = gcrsToItrs.transpose();

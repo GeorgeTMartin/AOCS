@@ -1,13 +1,22 @@
 #include "simulation/initialization.hpp"
 #include "environment/earth_rotation/iau2000b.hpp"
+#include "astro/ijk_keplerian.hpp"
 #include "gnc_lib.hpp"
 #include "ipc.hpp"
 #include <Eigen/Dense>
+#include <algorithm>
+#include <chrono>
+#include <cmath>
+#include <iomanip>
 #include <iostream>
+#include <sstream>
+#include <string>
+#include <unistd.h>
 
 namespace {
 
 constexpr double kPlaceholderGpsMeasurementVariance = 1.0;
+constexpr std::size_t kTelemetryLineCount = 7;
 
 struct EnvironmentalParameters {
     Eigen::Vector3d gravityForce_eci_N;
@@ -104,6 +113,87 @@ void writeState(
     simulation.outputFile << '\n';
 }
 
+std::string renderTelemetry(
+    const aocs::simulation::Simulation& simulation,
+    bool useColor) {
+    const orbitalElements elements = IJKKeplerian::convert_ijk_to_keplerian(
+        simulation.state.position_eci_m,
+        simulation.state.velocity_eci_m_s);
+    const double progress = std::clamp(
+        simulation.elapsedTime_s / simulation.simulationLength_s,
+        0.0,
+        1.0);
+    constexpr int progressBarWidth = 30;
+    const int progressBarFill =
+        static_cast<int>(std::round(progress * progressBarWidth));
+    constexpr double kRadiansToDegrees = 180.0 / 3.14159265358979323846;
+    const char* blue = useColor ? "\033[38;2;88;166;255m" : "";
+    const char* orange = useColor ? "\033[38;2;250;141;17m" : "";
+    const char* reset = useColor ? "\033[0m" : "";
+
+    std::ostringstream display;
+    display << std::fixed << std::setprecision(3)
+            << blue << "SIMULATION TELEMETRY" << reset << '\n'
+            << blue << "Time: " << reset << orange << simulation.elapsedTime_s
+            << reset << blue << " / " << reset << orange
+            << simulation.simulationLength_s << reset << blue
+            << " s | J2000: " << reset << orange
+            << simulation.epoch_J2000_s + simulation.elapsedTime_s << reset
+            << blue << " s" << reset << '\n'
+            << std::setprecision(2)
+            << blue << "Orbit: a=" << reset << orange << elements.sma << reset
+            << blue << " m  e=" << reset << orange << elements.e << reset
+            << blue << "  i=" << reset << orange
+            << elements.i * kRadiansToDegrees << reset << blue << " deg"
+            << reset << '\n'
+            << blue << "       RAAN=" << reset << orange
+            << elements.omega * kRadiansToDegrees << reset << blue
+            << " deg  argp=" << reset << orange
+            << elements.argp * kRadiansToDegrees << reset << blue
+            << " deg  nu=" << reset << orange
+            << elements.nu * kRadiansToDegrees << reset << blue << " deg"
+            << reset << '\n'
+            << std::setprecision(1)
+            << blue << "ECI position [m]:  " << reset << orange
+            << simulation.state.position_eci_m.transpose() << reset << '\n'
+            << blue << "ECI velocity [m/s]: " << reset << orange
+            << simulation.state.velocity_eci_m_s.transpose() << reset << '\n'
+            << blue << '[' << reset << orange
+            << std::string(progressBarFill, '=') << reset << blue
+            << std::string(progressBarWidth - progressBarFill, ' ') << ']'
+            << reset << ' ' << orange << std::setprecision(1) << progress * 100.0
+            << reset << blue << "%  Simulation Rate: " << reset << orange
+            << simulation.elapsedTime_s /
+                   std::chrono::duration<double>(
+                       std::chrono::steady_clock::now() - simulation.sim_start)
+                       .count()
+            << reset << blue << "x Real-Time" << reset;
+    return display.str();
+}
+
+void publishTelemetry(
+    const aocs::simulation::Simulation& simulation,
+    bool interactive,
+    bool& hasDrawnTelemetry) {
+    if (!interactive && simulation.running) {
+        return;
+    }
+
+    if (interactive && hasDrawnTelemetry) {
+        std::cout << "\033[" << kTelemetryLineCount << 'A';
+    }
+    std::istringstream lines(renderTelemetry(simulation, interactive));
+    std::string line;
+    while (std::getline(lines, line)) {
+        if (interactive) {
+            std::cout << "\r\033[2K";
+        }
+        std::cout << line << '\n';
+    }
+    std::cout.flush();
+    hasDrawnTelemetry = true;
+}
+
 } // namespace
 
 int main() {
@@ -115,14 +205,18 @@ int main() {
 
     try {
         SharedMemoryRegion sharedMemory;
-        aocs::GncState gncState = aocs::initializeGnc(
-            simulation->gncAccelerationProcessNoiseSpectralDensity_m2_s3);
+        aocs::GncState gncState = aocs::initializeGnc();
         SharedMemoryGncTransport transport(
             sharedMemory.data(),
             [&gncState](sharedMemoryMap& memory) {
                 return aocs::runGncStep(gncState, memory);
             });
 
+        const bool interactive = isatty(STDOUT_FILENO) != 0;
+        bool hasDrawnTelemetry = false;
+        simulation->sim_start = std::chrono::steady_clock::now();
+        auto lastTelemetryUpdate = simulation->sim_start;
+        publishTelemetry(*simulation, interactive, hasDrawnTelemetry);
         sensorMessage latestGpsMeasurement;
         std::uint64_t aocsStep = 0;
         while (simulation->running) {
@@ -159,17 +253,17 @@ int main() {
 
             writeState(*simulation, latestGpsMeasurement, navigationEstimate);
 
+            const auto now = std::chrono::steady_clock::now();
+            if (now - lastTelemetryUpdate >= std::chrono::milliseconds(100)) {
+                publishTelemetry(*simulation, interactive, hasDrawnTelemetry);
+                lastTelemetryUpdate = now;
+            }
             if (simulation->elapsedTime_s >= simulation->simulationLength_s) {
-                std::cout << "Simulation ended at time: "
-                          << simulation->elapsedTime_s << " sec\n";
-                std::cout << "Final position: "
-                          << simulation->state.position_eci_m.transpose() << "\n";
-                std::cout << "Final velocity: "
-                          << simulation->state.velocity_eci_m_s.transpose() << "\n";
                 simulation->running = false;
             }
             ++aocsStep;
         }
+        publishTelemetry(*simulation, interactive, hasDrawnTelemetry);
     } catch (const std::exception& error) {
         std::cerr << "Simulation/GNC shared-memory failure: "
                   << error.what() << '\n';

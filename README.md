@@ -50,10 +50,9 @@ and publishes the ECI state and 6x6 covariance in
 the published estimate is usable. The simulation currently supplies an
 identity GPS measurement covariance as a placeholder; replace it with the
 sensor model's covariance when available.
-The GNC acceleration process-noise spectral density is configured at
-`gnc.acceleration_process_noise_spectral_density_m2_s3` in `config.json`.
-Its current `1e-4 m²/s³` value is a provisional tuning value for this
-simulation, not a sensor-certified specification.
+The GNC acceleration process-noise spectral density is configured internally
+in [`gnc_config.hpp`](./gnc_lib/gnc_config.hpp). Its current `1e-4 m²/s³`
+value is a provisional tuning value, not a sensor-certified specification.
 
 The shared-memory transport is synchronous and in-process for now; a future
 UDP transport can implement the same interface when GNC runs in a separate

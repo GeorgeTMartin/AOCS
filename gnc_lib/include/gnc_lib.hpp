@@ -7,20 +7,16 @@
 namespace aocs {
 
 struct GncState {
-    explicit GncState(
-        double accelerationProcessNoiseSpectralDensity_m2_s3 =
-            GncConfig::accelerationProcessNoiseSpectralDensity_m2_s3)
+    GncState()
         : orbitDetermination(
               GncConfig::orbitDeterminationMethod,
-              accelerationProcessNoiseSpectralDensity_m2_s3) {}
+              GncConfig::accelerationProcessNoiseSpectralDensity_m2_s3) {}
 
     OrbitDetermination orbitDetermination;
     bool hasInitialEstimate = false;
 };
 
-GncState initializeGnc(
-    double accelerationProcessNoiseSpectralDensity_m2_s3 =
-        GncConfig::accelerationProcessNoiseSpectralDensity_m2_s3);
+GncState initializeGnc();
 int runGncStep(GncState& state, sharedMemoryMap& sharedMemory);
 
 } // namespace aocs
