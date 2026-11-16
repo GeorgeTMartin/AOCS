@@ -127,8 +127,8 @@ std::string renderTelemetry(
     const int progressBarFill =
         static_cast<int>(std::round(progress * progressBarWidth));
     constexpr double kRadiansToDegrees = 180.0 / 3.14159265358979323846;
-    const char* blue = useColor ? "\033[38;2;88;166;255m" : "";
-    const char* orange = useColor ? "\033[38;2;250;141;17m" : "";
+    const char* blue = useColor ? "\033[38;2;74;117;158m" : "";
+    const char* orange = useColor ? "\033[38;2;204;132;82m" : "";
     const char* reset = useColor ? "\033[0m" : "";
 
     std::ostringstream display;
@@ -141,23 +141,31 @@ std::string renderTelemetry(
             << simulation.epoch_J2000_s + simulation.elapsedTime_s << reset
             << blue << " s" << reset << '\n'
             << std::setprecision(2)
-            << blue << "Orbit: a=" << reset << orange << elements.sma << reset
-            << blue << " m  e=" << reset << orange << elements.e << reset
-            << blue << "  i=" << reset << orange
+            << blue << "Orbit: a = " << reset << orange << elements.sma << reset
+            << blue << " m  e = " << reset << orange << elements.e << reset
+            << blue << "  i = " << reset << orange
             << elements.i * kRadiansToDegrees << reset << blue << " deg"
             << reset << '\n'
-            << blue << "       RAAN=" << reset << orange
+            << blue << "       RAAN = " << reset << orange
             << elements.omega * kRadiansToDegrees << reset << blue
-            << " deg  argp=" << reset << orange
+            << " deg  argp = " << reset << orange
             << elements.argp * kRadiansToDegrees << reset << blue
-            << " deg  nu=" << reset << orange
+            << " deg  nu = " << reset << orange
             << elements.nu * kRadiansToDegrees << reset << blue << " deg"
             << reset << '\n'
             << std::setprecision(1)
-            << blue << "ECI position [m]:  " << reset << orange
-            << simulation.state.position_eci_m.transpose() << reset << '\n'
-            << blue << "ECI velocity [m/s]: " << reset << orange
-            << simulation.state.velocity_eci_m_s.transpose() << reset << '\n'
+            << blue << std::left << std::setw(20) << "ECI position [m]:"
+            << reset << orange << std::right
+            << std::setw(14) << simulation.state.position_eci_m.x()
+            << std::setw(14) << simulation.state.position_eci_m.y()
+            << std::setw(14) << simulation.state.position_eci_m.z()
+            << reset << '\n'
+            << blue << std::left << std::setw(20) << "ECI velocity [m/s]:"
+            << reset << orange << std::right
+            << std::setw(14) << simulation.state.velocity_eci_m_s.x()
+            << std::setw(14) << simulation.state.velocity_eci_m_s.y()
+            << std::setw(14) << simulation.state.velocity_eci_m_s.z()
+            << reset << '\n'
             << blue << '[' << reset << orange
             << std::string(progressBarFill, '=') << reset << blue
             << std::string(progressBarWidth - progressBarFill, ' ') << ']'

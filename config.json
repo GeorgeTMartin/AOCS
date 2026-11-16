@@ -15,8 +15,8 @@
     "environment": {
         "gravity": {
             "model": "egm2008",
-            "degree": 2,
-            "order": 0
+            "degree": 8,
+            "order": 8
         }
     }
 }
