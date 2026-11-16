@@ -1,4 +1,5 @@
 #include "environment/earth_rotation/iau2000b.hpp"
+#include "conversions/frames/FK5.hpp"
 #include "gnc_lib.hpp"
 #include "ipc.hpp"
 #include <math/quaternion.hpp>
@@ -224,7 +225,7 @@ void testSharedMemoryRegionRecoversStaleObject() {
 }
 
 void testGncStateEstimatePublication() {
-    aocs::GncState state = aocs::initializeGnc();
+    aocs::GNCExecutive executive = aocs::initializeGnc();
     sharedMemoryMap memory{};
     sensorMessage& input = memory.sensorData;
     const double t_J2000_s = 100.0;
@@ -240,19 +241,15 @@ void testGncStateEstimatePublication() {
     input.GPS_covariance_row_major[1] = 0.25;
     input.GPS_covariance_row_major[aocs::ipc::kStateDimension] = 0.25;
 
-    require(aocs::runGncStep(state, memory) == 0,
+    require(aocs::runGncStep(executive, memory) == 0,
             "GNC step must publish its initial GPS-based estimate");
     require(memory.navigationEstimate.valid == 1,
             "GNC must mark its published estimate valid");
     requireNear(memory.navigationEstimate.time_J2000_s, t_J2000_s, 1e-12,
         "Published estimate must use seconds since J2000");
 
-    const aocs::environment::JulianDate date =
-        aocs::environment::JulianDate::fromJ2000Seconds(t_J2000_s);
     const Eigen::Matrix3d ecefToEci =
-        aocs::environment::EarthRotation(date, date)
-            .reduce()
-            .gcrsToItrs.transpose();
+        getQuaternionECEFtoECI(t_J2000_s).toRotationMatrix();
     const Eigen::Vector3d position_ecef(
         input.GPS_position_ECEF_m[0],
         input.GPS_position_ECEF_m[1],
@@ -283,7 +280,7 @@ void testGncStateEstimatePublication() {
 
     input.has_new_GPS_measurement = 0;
     input.aocs_time_J2000_s = t_J2000_s + 0.1;
-    require(aocs::runGncStep(state, memory) == 0,
+    require(aocs::runGncStep(executive, memory) == 0,
             "GNC must propagate between GPS measurements");
     requireNear(memory.navigationEstimate.time_J2000_s, t_J2000_s + 0.1,
         1e-12,
@@ -312,7 +309,7 @@ void testGncStateEstimatePublication() {
     const double covarianceBeforeGpsUpdate =
         Eigen::Map<const Eigen::Matrix<double, 6, 6, Eigen::RowMajor>>(
             memory.navigationEstimate.covariance_row_major.data())(0, 0);
-    require(aocs::runGncStep(state, memory) == 0,
+    require(aocs::runGncStep(executive, memory) == 0,
             "GNC must process a subsequent GPS update");
     const double covarianceAfterGpsUpdate =
         Eigen::Map<const Eigen::Matrix<double, 6, 6, Eigen::RowMajor>>(

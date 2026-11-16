@@ -1,5 +1,7 @@
 add_library(gnc_lib STATIC
     main.cpp
+    src/conversions/frames/FK5.cpp
+    src/navigation/navigation.cpp
     src/navigation/orbit_determination.cpp
 )
 

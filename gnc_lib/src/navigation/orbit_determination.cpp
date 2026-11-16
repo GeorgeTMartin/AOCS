@@ -5,6 +5,7 @@
 #include "navigation/orbit_determination.hpp"
 #include "flight_constants.hpp"
 
+namespace aocs::navigation {
 
 OrbitDetermination::OrbitDetermination(
     OrbitDeterminationMethod method,
@@ -12,8 +13,11 @@ OrbitDetermination::OrbitDetermination(
     : method(method),
       accelerationProcessNoiseSpectralDensity_m2_s3(
           accelerationProcessNoiseSpectralDensity_m2_s3),
-      inertialState{0.0, Eigen::Vector3d::Zero(), Eigen::Vector3d::Zero(), Eigen::MatrixXd::Identity(6, 6)},
-      measurement{0.0, Eigen::Vector3d::Zero(), Eigen::Vector3d::Zero(), Eigen::MatrixXd::Identity(6, 6)} {
+      inertialState{
+          0.0,
+          Eigen::Vector3d::Zero(),
+          Eigen::Vector3d::Zero(),
+          Eigen::MatrixXd::Identity(6, 6)} {
     if (!std::isfinite(accelerationProcessNoiseSpectralDensity_m2_s3) ||
         accelerationProcessNoiseSpectralDensity_m2_s3 < 0.0) {
         throw std::invalid_argument(
@@ -50,14 +54,10 @@ void OrbitDetermination::PropagateInertialState(
     const Eigen::MatrixXd covarianceAtStart = state.covariance;
     const double radius_m = positionAtStart_eci_m.norm();
     const double elapsedTime_s = t_end_J2000_s - t_start_J2000_s;
-    const Eigen::Vector3d vec3_a_sc_eci =
-        -flight_constants::kEarthMu * positionAtStart_eci_m /
-        (radius_m * radius_m * radius_m);
+    const Eigen::Vector3d vec3_a_sc_eci = -flight_constants::kEarthMu * positionAtStart_eci_m / (radius_m * radius_m * radius_m);
 
-    state.vec3_r_sc_eci =
-        positionAtStart_eci_m + velocityAtStart_eci_m_s * elapsedTime_s;
-    state.vec3_v_sc_eci =
-        velocityAtStart_eci_m_s + vec3_a_sc_eci * elapsedTime_s;
+    state.vec3_r_sc_eci = positionAtStart_eci_m + velocityAtStart_eci_m_s * elapsedTime_s;
+    state.vec3_v_sc_eci = velocityAtStart_eci_m_s + vec3_a_sc_eci * elapsedTime_s;
     state.t_estimate_J2000_s = t_end_J2000_s;
 
     const double radiusSquared_m2 = radius_m * radius_m;
@@ -97,7 +97,9 @@ void OrbitDetermination::PropagateInertialState(
     return;
 }
 
-void OrbitDetermination::MeasurementUpdate(InertialStateEstimate& estimate, const InertialStateEstimate& measurement) {
+void OrbitDetermination::MeasurementUpdate(
+    InertialStateEstimate& estimate,
+    const InertialStateEstimate& measurement) {
     Eigen::Matrix<double, 6, 1> estimatedState;
     estimatedState << estimate.vec3_r_sc_eci, estimate.vec3_v_sc_eci;
     Eigen::Matrix<double, 6, 1> measuredState;
@@ -116,16 +118,28 @@ void OrbitDetermination::MeasurementUpdate(InertialStateEstimate& estimate, cons
         (Eigen::Matrix<double, 6, 6>::Identity() - kalmanGain) * estimate.covariance;
 }
 
-void OrbitDetermination::UpdateInertialState(InertialStateEstimate& GPSMeasurement, double& t_J2000_s) {
-    // Implementation for updating the inertial state based on the measurement and time
-    // Propagate the inertial state and covariance to the new time
-    PropagateInertialState(inertialState, inertialState.t_estimate_J2000_s, t_J2000_s);
-    // Propagate the measurement and measurement covariance to the new time
-    PropagateInertialState(GPSMeasurement, t_J2000_s, inertialState.t_estimate_J2000_s);
-    // measurement update
-    MeasurementUpdate(inertialState, GPSMeasurement);
+void OrbitDetermination::UpdateInertialState(
+    const InertialStateEstimate& measurement,
+    double t_J2000_s) {
+    if (!std::isfinite(measurement.t_estimate_J2000_s) ||
+        !std::isfinite(t_J2000_s) ||
+        t_J2000_s < measurement.t_estimate_J2000_s) {
+        throw std::invalid_argument(
+            "Orbit determination update time must be finite and not precede the measurement");
+    }
+
+    PropagateInertialState(
+        inertialState, inertialState.t_estimate_J2000_s, t_J2000_s);
+    InertialStateEstimate propagatedMeasurement = measurement;
+    PropagateInertialState(
+        propagatedMeasurement,
+        measurement.t_estimate_J2000_s,
+        t_J2000_s);
+    MeasurementUpdate(inertialState, propagatedMeasurement);
 }
 
 const InertialStateEstimate& OrbitDetermination::GetInertialStateEstimate() const {
     return inertialState;
 }
+
+} // namespace aocs::navigation

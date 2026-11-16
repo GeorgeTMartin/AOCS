@@ -43,13 +43,16 @@ Run the simulation from the repository root:
 The simulation initializes persistent GNC state once with
 `aocs::initializeGnc()`, then publishes GPS position, velocity, time, and
 measurement covariance to POSIX shared memory before calling
-`aocs::runGncStep()` each simulation step. The GNC entry point converts the
-ECEF measurement to ECI, initializes its estimate from the first measurement,
-and publishes the ECI state and 6x6 covariance in
-`sharedMemoryMap::navigationEstimate`. Its `valid` field indicates whether
-the published estimate is usable. The simulation currently supplies an
-identity GPS measurement covariance as a placeholder; replace it with the
-sensor model's covariance when available.
+`aocs::runGncStep()` each simulation step. The GNC boundary maps shared-memory
+messages into internal navigation inputs, evaluates the GNC state machine,
+and calls the navigation step. Navigation owns the orbit-determination
+instance, initializes from the first GPS measurement, and propagates the
+estimate between measurements. The boundary maps the resulting ECI state and
+6x6 covariance back into `sharedMemoryMap::navigationEstimate`; its `valid`
+field indicates whether the estimate is usable. Guidance and control steps
+are not implemented yet. The simulation currently supplies an identity GPS
+measurement covariance as a placeholder; replace it with the sensor model's
+covariance when available.
 The GNC acceleration process-noise spectral density is configured internally
 in [`gnc_config.hpp`](./gnc_lib/gnc_config.hpp). Its current `1e-4 m²/s³`
 value is a provisional tuning value, not a sensor-certified specification.

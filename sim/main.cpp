@@ -213,11 +213,11 @@ int main() {
 
     try {
         SharedMemoryRegion sharedMemory;
-        aocs::GncState gncState = aocs::initializeGnc();
+        aocs::GNCExecutive gncExecutive = aocs::initializeGnc();
         SharedMemoryGncTransport transport(
             sharedMemory.data(),
-            [&gncState](sharedMemoryMap& memory) {
-                return aocs::runGncStep(gncState, memory);
+            [&gncExecutive](sharedMemoryMap& memory) {
+                return aocs::runGncStep(gncExecutive, memory);
             });
 
         const bool interactive = isatty(STDOUT_FILENO) != 0;
