@@ -6,6 +6,7 @@
 #include <exception>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <string>
 
 namespace aocs::simulation {
@@ -72,35 +73,77 @@ std::unique_ptr<Simulation> initializeSimulation() {
     const Json::Value& simulationConfig = config["simulation"];
     if (!simulationConfig["orbit_count"].isUInt() ||
         simulationConfig["orbit_count"].asUInt() == 0 ||
+        !simulationConfig["true_state_rate_hz"].isNumeric() ||
         !simulationConfig["aocs_rate_hz"].isNumeric() ||
+        !simulationConfig["log_rate_hz"].isNumeric() ||
         !simulationConfig["gps_rate_hz"].isNumeric()) {
-        std::cerr << "simulation.orbit_count, aocs_rate_hz, and gps_rate_hz must be positive values\n";
+        std::cerr << "simulation.orbit_count, true_state_rate_hz, aocs_rate_hz, "
+                     "log_rate_hz, and gps_rate_hz must be positive values\n";
         return nullptr;
     }
+    const double trueStateRate_Hz =
+        simulationConfig["true_state_rate_hz"].asDouble();
     const double aocsRate_Hz = simulationConfig["aocs_rate_hz"].asDouble();
+    const double logRate_Hz = simulationConfig["log_rate_hz"].asDouble();
     const double gpsRate_Hz = simulationConfig["gps_rate_hz"].asDouble();
     simulation->mass_kg = config["spacecraft"]["mass_kg"].asDouble();
     if (!std::isfinite(simulation->epoch_J2000_s)) {
         std::cerr << "simulation.initial_conditions.t_J2000_s must be finite\n";
         return nullptr;
     }
-    if (!std::isfinite(aocsRate_Hz) ||
+    if (!std::isfinite(trueStateRate_Hz) ||
+        !std::isfinite(aocsRate_Hz) ||
+        !std::isfinite(logRate_Hz) ||
         !std::isfinite(gpsRate_Hz) ||
         !std::isfinite(simulation->mass_kg) ||
+        trueStateRate_Hz <= 0.0 ||
         aocsRate_Hz <= 0.0 ||
+        logRate_Hz <= 0.0 ||
         gpsRate_Hz <= 0.0 ||
         simulation->mass_kg <= 0.0) {
-        std::cerr << "AOCS/GPS rates and spacecraft mass must be finite and positive\n";
+        std::cerr << "True-state/AOCS/log/GPS rates and spacecraft mass must be "
+                     "finite and positive\n";
+        return nullptr;
+    }
+    const double aocsIntervalSteps =
+        trueStateRate_Hz / aocsRate_Hz;
+    const double roundedAocsIntervalSteps = std::round(aocsIntervalSteps);
+    if (!std::isfinite(aocsIntervalSteps) ||
+        roundedAocsIntervalSteps < 1.0 ||
+        static_cast<long double>(roundedAocsIntervalSteps) >
+            static_cast<long double>(
+                std::numeric_limits<std::uint64_t>::max()) ||
+        std::abs(aocsIntervalSteps - roundedAocsIntervalSteps) > 1e-9) {
+        std::cerr << "True-state rate must be an integer multiple of the AOCS rate\n";
+        return nullptr;
+    }
+    const double logIntervalSteps = trueStateRate_Hz / logRate_Hz;
+    const double roundedLogIntervalSteps = std::round(logIntervalSteps);
+    if (!std::isfinite(logIntervalSteps) ||
+        roundedLogIntervalSteps < 1.0 ||
+        static_cast<long double>(roundedLogIntervalSteps) >
+            static_cast<long double>(
+                std::numeric_limits<std::uint64_t>::max()) ||
+        std::abs(logIntervalSteps - roundedLogIntervalSteps) > 1e-9) {
+        std::cerr << "True-state rate must be an integer multiple of the log rate\n";
         return nullptr;
     }
     const double gpsIntervalSteps = aocsRate_Hz / gpsRate_Hz;
     const double roundedGpsIntervalSteps = std::round(gpsIntervalSteps);
-    if (roundedGpsIntervalSteps < 1.0 ||
+    if (!std::isfinite(gpsIntervalSteps) ||
+        roundedGpsIntervalSteps < 1.0 ||
+        static_cast<long double>(roundedGpsIntervalSteps) >
+            static_cast<long double>(
+                std::numeric_limits<std::uint64_t>::max()) ||
         std::abs(gpsIntervalSteps - roundedGpsIntervalSteps) > 1e-9) {
         std::cerr << "AOCS rate must be an integer multiple of the GPS rate\n";
         return nullptr;
     }
-    simulation->dt_sec = 1.0 / aocsRate_Hz;
+    simulation->dt_sec = 1.0 / trueStateRate_Hz;
+    simulation->aocsIntervalSteps =
+        static_cast<std::uint64_t>(roundedAocsIntervalSteps);
+    simulation->logIntervalSteps =
+        static_cast<std::uint64_t>(roundedLogIntervalSteps);
     simulation->gpsSampleIntervalSteps =
         static_cast<std::uint64_t>(roundedGpsIntervalSteps);
 

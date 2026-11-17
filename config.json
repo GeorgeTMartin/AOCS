@@ -6,7 +6,9 @@
             "t_J2000_s": 746337600.0
         },
         "orbit_count": 2,
+        "true_state_rate_hz": 100,
         "aocs_rate_hz": 10,
+        "log_rate_hz": 10,
         "gps_rate_hz": 1
     },
     "spacecraft": {

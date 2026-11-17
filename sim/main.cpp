@@ -226,6 +226,8 @@ int main() {
         auto lastTelemetryUpdate = simulation->sim_start;
         publishTelemetry(*simulation, interactive, hasDrawnTelemetry);
         sensorMessage latestGpsMeasurement;
+        navigationEstimateMessage latestNavigationEstimate{};
+        std::uint64_t trueStateStep = 0;
         std::uint64_t aocsStep = 0;
         while (simulation->running) {
             const ActuatorState actuators = updateActuatorDynamics(*simulation);
@@ -241,25 +243,33 @@ int main() {
                         (environment.gravityForce_eci_N + actuators.force_eci_N) /
                         simulation->mass_kg);
                 });
-            if (aocsStep % simulation->gpsSampleIntervalSteps == 0) {
-                latestGpsMeasurement = updateSensorModels(*simulation);
-            } else {
-                latestGpsMeasurement.has_new_GPS_measurement = 0;
-                latestGpsMeasurement.aocs_time_J2000_s =
-                    simulation->epoch_J2000_s + simulation->elapsedTime_s;
-            }
-            if (runAOCSLoop(transport, latestGpsMeasurement) != 0) {
-                std::cerr << "GNC loop reported a failure\n";
-                return 1;
-            }
-            const navigationEstimateMessage& navigationEstimate =
-                sharedMemory.data().navigationEstimate;
-            if (navigationEstimate.valid == 0) {
-                std::cerr << "GNC did not publish a valid navigation estimate\n";
-                return 1;
+            ++trueStateStep;
+            if (trueStateStep % simulation->aocsIntervalSteps == 0) {
+                if (aocsStep % simulation->gpsSampleIntervalSteps == 0) {
+                    latestGpsMeasurement = updateSensorModels(*simulation);
+                } else {
+                    latestGpsMeasurement.has_new_GPS_measurement = 0;
+                    latestGpsMeasurement.aocs_time_J2000_s =
+                        simulation->epoch_J2000_s + simulation->elapsedTime_s;
+                }
+                if (runAOCSLoop(transport, latestGpsMeasurement) != 0) {
+                    std::cerr << "GNC loop reported a failure\n";
+                    return 1;
+                }
+                latestNavigationEstimate =
+                    sharedMemory.data().navigationEstimate;
+                if (latestNavigationEstimate.valid == 0) {
+                    std::cerr << "GNC did not publish a valid navigation estimate\n";
+                    return 1;
+                }
+                ++aocsStep;
             }
 
-            writeState(*simulation, latestGpsMeasurement, navigationEstimate);
+            if (latestNavigationEstimate.valid != 0 &&
+                trueStateStep % simulation->logIntervalSteps == 0) {
+                writeState(
+                    *simulation, latestGpsMeasurement, latestNavigationEstimate);
+            }
 
             const auto now = std::chrono::steady_clock::now();
             if (now - lastTelemetryUpdate >= std::chrono::milliseconds(100)) {
@@ -269,7 +279,6 @@ int main() {
             if (simulation->elapsedTime_s >= simulation->simulationLength_s) {
                 simulation->running = false;
             }
-            ++aocsStep;
         }
         publishTelemetry(*simulation, interactive, hasDrawnTelemetry);
     } catch (const std::exception& error) {

@@ -78,9 +78,13 @@ pip install -r requirements.txt
 ```
 
 The default simulation runs for two initial-condition orbital periods. It
-propagates and runs the AOCS loop at 10 Hz, while GPS measurements are sampled
-at 1 Hz and held between updates. The output CSV includes the state estimate
-and full 6x6 estimate covariance at every AOCS step.
+propagates the true state at 100 Hz and runs the AOCS loop at 10 Hz, while GPS
+measurements are sampled at 1 Hz and held between updates. The output CSV is
+recorded at 10 Hz and includes the state estimate and full 6x6 estimate
+covariance at each log step. Configure `true_state_rate_hz`, `aocs_rate_hz`,
+`log_rate_hz`, and `gps_rate_hz` under `simulation` in `config.json`. The
+true-state rate must be an integer multiple of the AOCS and log rates, and the
+AOCS rate must be an integer multiple of the GPS rate.
 
 After running the simulation, generate the interactive report from the
 repository root:

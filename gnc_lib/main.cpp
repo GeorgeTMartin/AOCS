@@ -13,12 +13,6 @@
 namespace aocs {
 namespace {
 
-using StateCovarianceRowMajor = Eigen::Matrix<
-    double,
-    ipc::kStateDimension,
-    ipc::kStateDimension,
-    Eigen::RowMajor>;
-
 navigation::NavigationInput mapNavigationInput(const sensorMessage& sensors) {
     navigation::NavigationInput input;
     input.time_J2000_s = sensors.aocs_time_J2000_s;
@@ -42,14 +36,16 @@ navigation::NavigationInput mapNavigationInput(const sensorMessage& sensors) {
     const Eigen::Matrix3d ecefToEci = earthRotation.toRotationMatrix();
     const Eigen::Vector3d position_ecef_m = Eigen::Map<const Eigen::Vector3d>(sensors.GPS_position_ECEF_m.data());
     const Eigen::Vector3d velocity_ecef_m_s = Eigen::Map<const Eigen::Vector3d>(sensors.GPS_velocity_ECEF_m_s.data());
-    const Eigen::Vector3d earthAngularVelocity_ecef_rad_s(0.0, 0.0, 7.2921150e-5);
+    const Eigen::Vector3d earthAngularVelocity_ecef_rad_s(0.0, 0.0, flight_constants::kEarthAngularRate);
 
     navigation::InertialStateEstimate measurement;
     measurement.t_estimate_J2000_s = gpsTime_J2000_s;
     measurement.vec3_r_sc_eci = ecefToEci * position_ecef_m;
     measurement.vec3_v_sc_eci = ecefToEci * (velocity_ecef_m_s + earthAngularVelocity_ecef_rad_s.cross(position_ecef_m));
 
-    measurement.covariance = Eigen::Map<const StateCovarianceRowMajor>(sensors.GPS_covariance_row_major.data());
+    measurement.covariance =
+        Eigen::Map<const navigation::StateCovariance>(
+            sensors.GPS_covariance_row_major.data());
     input.gpsMeasurement = std::move(measurement);
     return input;
 }
@@ -58,11 +54,7 @@ void mapNavigationOutputToIpc(
     const navigation::InertialStateEstimate& estimate,
     navigationEstimateMessage& message) {
     message.valid = 0;
-    if (estimate.covariance.rows() !=
-            static_cast<Eigen::Index>(ipc::kStateDimension) ||
-        estimate.covariance.cols() !=
-            static_cast<Eigen::Index>(ipc::kStateDimension) ||
-        !std::isfinite(estimate.t_estimate_J2000_s) ||
+    if (!std::isfinite(estimate.t_estimate_J2000_s) ||
         !estimate.vec3_r_sc_eci.allFinite() ||
         !estimate.vec3_v_sc_eci.allFinite() ||
         !estimate.covariance.allFinite()) {
@@ -78,7 +70,7 @@ void mapNavigationOutputToIpc(
         message.velocity_ECI_m_s[index] = estimate.vec3_v_sc_eci(axis);
     }
 
-    const StateCovarianceRowMajor covariance = estimate.covariance;
+    const navigation::StateCovariance covariance = estimate.covariance;
     std::copy(
         covariance.data(),
         covariance.data() + covariance.size(),

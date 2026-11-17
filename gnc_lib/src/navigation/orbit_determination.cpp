@@ -15,9 +15,9 @@ OrbitDetermination::OrbitDetermination(
           accelerationProcessNoiseSpectralDensity_m2_s3),
       inertialState{
           0.0,
-          Eigen::Vector3d::Zero(),
-          Eigen::Vector3d::Zero(),
-          Eigen::MatrixXd::Identity(6, 6)} {
+          Eigen::Matrix<double,3,1>::Zero(),
+          Eigen::Matrix<double,3,1>::Zero(),
+          StateCovariance::Identity()} {
     if (!std::isfinite(accelerationProcessNoiseSpectralDensity_m2_s3) ||
         accelerationProcessNoiseSpectralDensity_m2_s3 < 0.0) {
         throw std::invalid_argument(
@@ -49,12 +49,12 @@ void OrbitDetermination::PropagateInertialState(
     InertialStateEstimate& state,
     double t_start_J2000_s,
     double t_end_J2000_s) {
-    const Eigen::Vector3d positionAtStart_eci_m = state.vec3_r_sc_eci;
-    const Eigen::Vector3d velocityAtStart_eci_m_s = state.vec3_v_sc_eci;
-    const Eigen::MatrixXd covarianceAtStart = state.covariance;
+    const Eigen::Matrix<double,3,1> positionAtStart_eci_m = state.vec3_r_sc_eci;
+    const Eigen::Matrix<double,3,1> velocityAtStart_eci_m_s = state.vec3_v_sc_eci;
+    const StateCovariance covarianceAtStart = state.covariance;
     const double radius_m = positionAtStart_eci_m.norm();
     const double elapsedTime_s = t_end_J2000_s - t_start_J2000_s;
-    const Eigen::Vector3d vec3_a_sc_eci = -flight_constants::kEarthMu * positionAtStart_eci_m / (radius_m * radius_m * radius_m);
+    const Eigen::Matrix<double,3,1> vec3_a_sc_eci = -flight_constants::kEarthMu * positionAtStart_eci_m / (radius_m * radius_m * radius_m);
 
     state.vec3_r_sc_eci = positionAtStart_eci_m + velocityAtStart_eci_m_s * elapsedTime_s;
     state.vec3_v_sc_eci = velocityAtStart_eci_m_s + vec3_a_sc_eci * elapsedTime_s;

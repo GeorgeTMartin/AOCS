@@ -12,3 +12,7 @@ target_include_directories(gnc_lib PUBLIC
     ${PROJECT_SOURCE_DIR}/sim/include
     ${PROJECT_SOURCE_DIR}/shared/external/eigen-5.0.0/eigen-5.0.0
 )
+
+target_compile_definitions(gnc_lib PRIVATE EIGEN_NO_MALLOC)
+
+set(CMAKE_CXX_FLAGS "-O2 -Wall -Wextra -Wpedantic")

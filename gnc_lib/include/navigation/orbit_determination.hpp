@@ -4,6 +4,9 @@
 
 namespace aocs::navigation {
 
+using StateCovariance =
+    Eigen::Matrix<double, 6, 6, Eigen::RowMajor>;
+
 enum class OrbitDeterminationMethod {
     ExtendedKalmanFilter,
     UnscentedKalmanFilter
@@ -11,9 +14,9 @@ enum class OrbitDeterminationMethod {
 
 struct InertialStateEstimate {
     double t_estimate_J2000_s = 0.0;
-    Eigen::Vector3d vec3_r_sc_eci = Eigen::Vector3d::Zero();
-    Eigen::Vector3d vec3_v_sc_eci = Eigen::Vector3d::Zero();
-    Eigen::MatrixXd covariance;
+    Eigen::Matrix<double,3,1> vec3_r_sc_eci = Eigen::Matrix<double,3,1>::Zero();
+    Eigen::Matrix<double,3,1> vec3_v_sc_eci = Eigen::Matrix<double,3,1>::Zero();
+    StateCovariance covariance = StateCovariance::Zero();
 };
 
 class OrbitDetermination {
