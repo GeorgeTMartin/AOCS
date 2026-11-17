@@ -23,7 +23,8 @@ class OrbitDetermination {
 public:
     explicit OrbitDetermination(
         OrbitDeterminationMethod method,
-        double accelerationProcessNoiseSpectralDensity_m2_s3);
+        const Eigen::Vector3d&
+            accelerationProcessNoiseSpectralDensityRTN_m2_s3);
 
     void InitializeInertialState(const InertialStateEstimate& initialEstimate);
     void PropagateTo(double t_J2000_s);
@@ -42,7 +43,7 @@ private:
         const InertialStateEstimate& measurement);
 
     OrbitDeterminationMethod method;
-    double accelerationProcessNoiseSpectralDensity_m2_s3;
+    Eigen::Vector3d accelerationProcessNoiseSpectralDensityRTN_m2_s3;
     InertialStateEstimate inertialState;
 };
 

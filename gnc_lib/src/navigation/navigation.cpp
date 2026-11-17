@@ -4,10 +4,11 @@ namespace aocs::navigation {
 
 Navigation::Navigation(
     OrbitDeterminationMethod method,
-    double accelerationProcessNoiseSpectralDensity_m2_s3)
+    const Eigen::Vector3d&
+        accelerationProcessNoiseSpectralDensityRTN_m2_s3)
     : orbitDetermination(
           method,
-          accelerationProcessNoiseSpectralDensity_m2_s3) {}
+          accelerationProcessNoiseSpectralDensityRTN_m2_s3) {}
 
 std::optional<InertialStateEstimate> Navigation::runStep(
     const NavigationInput& input) {

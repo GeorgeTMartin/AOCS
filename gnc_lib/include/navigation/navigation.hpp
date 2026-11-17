@@ -14,7 +14,8 @@ class Navigation {
 public:
     Navigation(
         OrbitDeterminationMethod method,
-        double accelerationProcessNoiseSpectralDensity_m2_s3);
+        const Eigen::Vector3d&
+            accelerationProcessNoiseSpectralDensityRTN_m2_s3);
 
     std::optional<InertialStateEstimate> runStep(
         const NavigationInput& input);

@@ -2,6 +2,7 @@
 #include "conversions/frames/FK5.hpp"
 #include "gnc_lib.hpp"
 #include "ipc.hpp"
+#include "navigation/orbit_determination.hpp"
 #include <math/quaternion.hpp>
 #include "simulation/simulation.hpp"
 #include "sim_constants.hpp"
@@ -155,6 +156,44 @@ void testRK4Propagation() {
                 "RK4 harmonic oscillator velocity mismatch");
     requireNear(elapsedTime_s, dt_sec, 0.0,
                 "RK4 propagation must advance elapsed simulation time");
+}
+
+void testRtnProcessNoiseUsesOrthogonalConfiguredAxes() {
+    using aocs::navigation::InertialStateEstimate;
+    using aocs::navigation::OrbitDetermination;
+    using aocs::navigation::OrbitDeterminationMethod;
+
+    const Eigen::Vector3d spectralDensityRTN(1.0, 4.0, 9.0);
+    OrbitDetermination orbitDetermination(
+        OrbitDeterminationMethod::ExtendedKalmanFilter,
+        spectralDensityRTN);
+    InertialStateEstimate initialEstimate;
+    initialEstimate.vec3_r_sc_eci = Eigen::Vector3d(7.0e6, 0.0, 0.0);
+    initialEstimate.vec3_v_sc_eci = Eigen::Vector3d(1200.0, 7500.0, 0.0);
+    initialEstimate.covariance.setZero();
+    orbitDetermination.InitializeInertialState(initialEstimate);
+
+    orbitDetermination.PropagateTo(1.0);
+
+    const Eigen::Matrix3d velocityCovariance =
+        orbitDetermination.GetInertialStateEstimate()
+            .covariance.block<3, 3>(3, 3);
+    for (Eigen::Index axis = 0; axis < 3; ++axis) {
+        requireNear(
+            velocityCovariance(axis, axis),
+            spectralDensityRTN(axis),
+            1e-12,
+            "RTN process noise must use the configured radial, transverse, and normal densities");
+        for (Eigen::Index otherAxis = 0; otherAxis < 3; ++otherAxis) {
+            if (axis != otherAxis) {
+                requireNear(
+                    velocityCovariance(axis, otherAxis),
+                    0.0,
+                    1e-12,
+                    "RTN process-noise axes must remain orthogonal for radial velocity");
+            }
+        }
+    }
 }
 
 sensorMessage receivedSensorMessage;
@@ -326,6 +365,7 @@ int main() {
         testQuaternion();
         testIau2000B();
         testRK4Propagation();
+        testRtnProcessNoiseUsesOrthogonalConfiguredAxes();
         testSharedMemoryGncTransport();
         testSharedMemoryRegionRecoversStaleObject();
         testGncStateEstimatePublication();

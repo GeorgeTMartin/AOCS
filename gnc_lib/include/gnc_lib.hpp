@@ -32,7 +32,7 @@ struct GNCExecutive {
     GNCExecutive()
         : navigation(
               GncConfig::orbitDeterminationMethod,
-              GncConfig::accelerationProcessNoiseSpectralDensity_m2_s3) {}
+              GncConfig::accelerationProcessNoiseSpectralDensityRTN_m2_s3) {}
 
     GNCStateMachine stateMachine;
     navigation::Navigation navigation;

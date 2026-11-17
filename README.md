@@ -54,8 +54,9 @@ are not implemented yet. The simulation currently supplies an identity GPS
 measurement covariance as a placeholder; replace it with the sensor model's
 covariance when available.
 The GNC acceleration process-noise spectral density is configured internally
-in [`gnc_config.hpp`](./gnc_lib/gnc_config.hpp). Its current `1e-4 m²/s³`
-value is a provisional tuning value, not a sensor-certified specification.
+in [`gnc_config.hpp`](./gnc_lib/gnc_config.hpp), in radial, transverse, and
+normal (RTN) order. The current `[1e-4, 1e-2, 1e-4] m²/s³` values are
+provisional tuning values, not a sensor-certified specification.
 
 The shared-memory transport is synchronous and in-process for now; a future
 UDP transport can implement the same interface when GNC runs in a separate
@@ -100,3 +101,67 @@ covariance ellipsoid in a local offset frame. The plotter calls the
 `aocs_orbit` pybind11 module, which invokes the C++
 `IJKKeplerian::convert_ijk_to_keplerian` function for each state vector.
 Angular elements are converted from radians to degrees.
+
+
+## Roadmap
+```text
+Week 1: Inertial Nav & EKF MVP
+├── High-Fidelity GPS
+│   ├── GPS Sensor Model
+│   └── Sensor Invalid Feature (General)
+└── EKF MVP Architecture
+    ├── Process Noise
+    └── Increased STM fidelity - exponential drag, J2, Vallado Sun/Moon Ephem
+
+Week 2: Hi-Fi Inertial Physics
+├── Drag Model (MSIS) - Pull in src FORTRAN
+├── Solar Pressure Model
+└── DE440 Ephemeris
+
+Week 3: Body Dynamics
+├── Frame Library
+│   ├── Sensor Frame
+│   └── Body Frame
+└── Bus Mass Simulation
+    ├── CG Calculation - Wet/Dry Mass
+    └── Inertia Dynamics - Tanks
+
+Week 4: Attitude System
+├── Attitude Dynamics
+│   ├── Quaternion Attitude Representation
+│   └── Attitude Propagation
+└── Attitude Sensing
+    ├── Sun Sensor
+    ├── Magnetometer / IGRF or WMM
+    ├── IMU
+    └── Star Tracker
+
+Week 5: Attitude Control I
+├── MEKF - Markley
+└── Attitude Control
+    ├── Torque Rod
+    └── B-Dot Control
+
+Week 6: Hi-Fi Attitude Sim
+├── Plate Model (SRP/Drag)
+└── Gravity Gradient
+
+Week 7: ADCS
+├── Attitude Actuators
+│   ├── Reaction Wheels
+│   └── Thrusters
+└── Attitude Control II
+    ├── LQR Body Control
+    ├── PD Momentum Control
+    ├── L2 RW Allocation
+    └── PID Torque Control
+
+Week 8: Station Keeping Guidance
+├── Hohmann Transfer
+├── Bi-Elliptic Transfer
+└── Inclination Change
+
+Week 9: Hi-Fi Orbital Maneuvering
+├── Thruster Allocation - Facet Method (?)
+└── Mass Flow Dynamics      
+```
