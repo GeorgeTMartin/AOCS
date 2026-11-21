@@ -10,7 +10,7 @@ LFS before cloning:
 ```sh
 sudo apt-get install git-lfs
 git lfs install
-git clone <repository-url>
+git clone git@github.com:OpenAOCS/AOCS.git
 ```
 
 For an existing clone, run `git lfs install` and then `git lfs pull` from the
